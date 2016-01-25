@@ -1,0 +1,523 @@
+README file for Leucippus software distribution.
+
+Software Goal
+=============
+Leucippus is a Java program aimed at determining mosaic SNVs and estimating
+their allelic frequency at specified sites of interest from amplicon and
+capture sequencing data. Mosaic SNV is one that is not uniformly present in
+the DNA of all cells sequenced. To make a decision about an SNV being mosaic,
+Leucippus estimates background sequencing noise from the other sites
+surrounding specified sites of interest. Confidence in conclusion for each
+site is reflected in a p-value, which is calculated based on the background
+noise. A dedicated functionality displays noise in the data graphically, to
+enable data visual inspection and quality control. The software also allows 
+constructing long read-fragments from pairs of reads with overlapping 3'-ends.
+
+Leucippus Four Tasks
+=====================
+ a.  Constructs long reads
+        -construction of long read by sliding paired reads and then choosing
+          the long read with the best matching window.
+           (the sliding is performed from left to right and 
+           from right to left(the paired reads are in fastq format, thus 
+           one read must be reversed and complemented before the sliding 
+           process).
+			 
+ b.  Creates noise tables that provide the following information 
+       for each reference position around the sites of interest:
+         - expected base counts
+         - specific mismatch counts
+         - next position(s) deletion  (number counts)
+         - next position(s) insertion (sequence-number counts)
+         - total position counts
+
+ c.  Creates graphs (single or comparison):
+         - p-value and mutation rate graphs by reading the above table(s).
+ 
+ d.  Making decision about provided sites, whether they are mosaics.
+
+
+
+1. Compilation
+==============
+Leucippus is a Java application. It runs on UNIX operating system with java 
+installed on it. First the Java extension files (programs) must be compiled
+into byte-code using the following directions.
+
+To compile Leucippus users must do the following:
+
+$ cd src
+$ javac Leucippus.java
+
+To test "Leucippus.class" while they are in Leucippus root directory, users
+must run:
+
+$ java Leucippus
+
+It must print on the screen the following general info about Leucippus
+commands:
+
+Program: Leucippus (Mosaics: Site Noise-Estimation, Validation, Identification)
+ Version: 0.1.0
+ Usage:   Leucippus <command> [options]
+
+  Command: frag           create long reads
+           noisetab       create noise table
+           graph          create graph
+           decide         decide [somatic | germline  | unknown | omitted]
+           extract        extract reads that present alternative allele
+
+           config         -cf+suffix <value> [none]
+
+
+
+2. Leucippus Commands
+=====================
+ Leucippus has 4 commands: frag, noisetab, graph, and decide. Each command is
+associated with a particular task:
+	   
+ a.  'frag'     => Constructs long reads from short paired reads.
+ b.  'noisetab' => Creates noise tables for sites of interest.
+ c.  'graph'    => Creates graphs from noise tables.
+ d.  'decide'   => Makes decision whether sites of interest are mosaics.
+
+Cut offs at each step:
+
+a. 'frag'
+min [50] bp overalp
+min 75% of matching bases in the overlap (hardcoded)
+
+b. 'noisetab'
+min read mapping quality 30 (hardcoded)
+min base quality [20]
+distance from interval boundaries [-1]
+
+c. 'graph'
+min coverage [100]
+max range [0.05]
+
+d. 'decide'
+min germline AF [0.35]
+min coverage [100]
+max p-value [0.05]
+
+
+A. Command 'frag'
+-----------------
+
+Leucippus constructs long fragments from paired reads which overlap. To find
+overlap, reads are sled against each other by one base pair at a time.
+
+    Beginning of read sliding 
+    read1 5'----------3'            slide to the right >
+    read2          3'----------5'   slide to the left  <
+
+    End of read sliding 
+    read1          5'----------3'
+    read2 3'----------5'
+
+Matched and mismatched nucleotides in the overlap are counted. Then a
+statistical test, using binomial coefficients, is performed to calculate
+the probability that such or a larger count of matches for the overlap length
+can occur by chance. Here a random chance for a base match is set to 0.25. The
+best overlap is the one with the smallest such probability. The pair of reads
+with the best overlap of at least 50 nucleotides in length and at least 75% of
+matched nucleotides is used to construct a long fragment. Nucleotides in the
+overlapping part of both reads are constructed in the following way:
+* if nucleotides match, then this nucleotide is assigned at the current
+  position, and its quality is equal to the sum of the nucleotide qualities at
+  this position in each read.
+* if nucleotides mismatch, then the one with the higher quality is assigned at
+  the current position, while its quality is reduced by the quality of the
+  other nucleotide. If the qualities are equal, one of the two nucleotides is
+  chosen randomly and its quality is assigned zero.
+
+Leucippus finds pairs of reads from their names. It recognizes the following
+naming conventions for read pairs.
+	@name type
+	@name:type
+	@name/type
+	@name
+where 'type' is one character (1-9 or a letter) to specify a read in a pair.
+For example,
+
+First  read  @HWI-7001311 1
+Second read  @HWI-7001311 2
+
+First  read  @read_pair_1:1
+Second read  @read_pair_1:3
+
+First  read  @HWI-7001311:50:H9V9KADXX:1:2116:15471:92324/1
+Second read  @HWI-7001311:50:H9V9KADXX:1:2116:15471:92324/2
+
+First  read  @HWI-7001311:50:H9V9KADXX:1:2116:15471:92324
+Second read  @HWI-7001311:50:H9V9KADXX:1:2116:15471:92324
+
+If other separator (other than 'space', ':', or '/') is used then this can be
+stated using a configuration argument -cfseparator.
+
+The usage of the command is as follows:
+
+java Leucippus frag [options] [file1.fq.gz file2.fq.gz]
+
+Options: -o  FILE        output file in gzip (e.g., longreads.fq.gz)
+         -o1 FILE        output file in gzip (e.g., remainedreads1.fq.gz)
+         -o2 FILE        output file in gzip (e.g., remainedreads2.fq.gz)
+         -l              maximum long reads length [500]
+Input:   file1.fq.gz     input gzipped file with reads in fastq format
+                         (if not provided, input is taken from standard input)
+         file2.fq.gz     input gzipped file with reads in fastq format
+
+
+First fastq file may contain both reads. In such a case there is no need to
+provide second fastq file. If no input files are provided, Leucippus expects 
+reads in fastq format from standard input (e.g., STDIN). This feature allows
+to generate long fragments from aligned .bam file by piping the output 
+of 'samtools bam2fq' command to Leucippus (see example below).
+
+Examples:
+
+java Leucippus frag -o long.fq.gz \
+     pathtoreads/reads1.fastq.gz \
+     pathtoreads/reads2.fastq.gz
+
+java Leucippus frag -o long.fq.gz -o1 remained1.fq.gz -o2 remained2.fq.gz \
+     pathtoreads/reads1.fastq.gz \
+     pathtoreads/reads2.fastq.gz
+
+java Leucippus frag -o out.fq.gz -l 300 pathtoreads/both_reads.fastq.gz
+
+gzip -cd pathtoreads/both_reads.fastq.gz | java Leucippus frag -o out.fq.gz
+
+samtools bam2fq pathtobam/file.bam | java Leucippus frag -o out.fq.gz
+
+To skip secondary aligments in BAM use the following
+
+samtools view -b -F 0x900 pathtobam/file.bam | samtools bam2fq - | \
+     java Leucippus frag -o out.fq.gz
+
+
+B. Command 'noisetab'
+---------------------
+
+Leucippus tabulates sequencing error (e.g., "noise") for sites targeted by
+amplicon or capture sequencing. This information is used later to call mosaic
+sites. In essence, the information tabulated is a comprehensive count of
+nucleotides and small "indels" in each read, covering a particular position.
+Therefore, the required inputs are a list of targeted sites, and .bam files
+with aligned reads. The table includes all necessary information that is used
+to visualize noise and make a decision about sites of interest being mosaic.
+	
+The tab-delimited interval file specifying the sites of interest is of the
+following format:
+
+CHROM	POS	REF	ALT	LEFT	RIGHT
+1	11242672	T	A	11242499	11242922
+1	72605472	C	T	72605349	72605579
+2	15636892	G	C	15636830	15637227
+
+where  
+ CHROM is chromosome
+ POS   is site of interest
+ REF   is expected nucleotide (same as reference nucleotide)
+ ALT   is alternative nucleotide (different from REF)
+ LEFT  is start of a targeted interval
+ RIGHT is end of a targeted interval
+                    
+All of these columns are required, but additional columns (e.g., with other
+information relevant to a particular experiment) are allowed. The distance cut
+off is applied to reads covering a particular site of interest and specifies:
+  i) the maximum distance from the first aligned position in a long read to the
+LEFT  position of the corresponding interval;
+ ii) the maximum distance from the last aligned position in a long read to the
+RIGHT position of the corresponding interval.
+If distance cut off is not specified or negative, then all reads will be 
+considered as data source (the default value is -1). The output table is 
+of the following format:
+
+chr	pos	x	y	Nuc_ref	Nuc_exp	tot	As	Cs	Ts  Gs
+2	5627738	261	184	A	A	8003	7987	9	3   4
+2	5627739	262	183	C	C	8003	10	7988	2   3
+2	5627740	263	182	C	G	8003	14	7980	3   6
+2	5627741	264	181	A	A	8004	7994	3	1   6
+2	5627742	265	180	C	C	8004	13	7980	6   5
+
+where  
+ chr       is chromosome
+ pos       is position
+ x         is the distance from the LEFT of the targeted interval
+ y         is the distance from the RIGHT of the targeted interval
+ Nuc_ref   is the reference nucleotide for this position
+ Nuc_exp   is the expected nucleotide (only different from Nuc_ref at
+           position for the sites of interest)
+ tot       is the coverage of the position by bases passing all cut offs
+           (excluding reads that contain a deletion at this position)
+ As        is the coverage by As passing all cut-offs
+ Cs        is the coverage by Cs passing all cut-offs
+ Ts        is the coverage by Ts passing all cut-offs
+ Gs        is the coverage by Gs passing all cut-offs
+
+ Noise tables also contain detailed information about mutations, 
+deletions (start, length), and insertions(start, length, and sequence) 
+of all positions in intervals of targeted site.
+Example of additional columns:  
+Ds	Ps	D1	D2	... D10	I1	I2... I10  DelInfo	InsInfo
+0	0	1	0 	... 0	0	0 ... 0	    0_1D_5627738_1, 0
+1	0	0	0 	... 0	0	0 ... 0	    0	            0
+0	0	0	0 	... 0	0	0 ... 0	    0	            0
+0	0	0	0 	... 0	0	0 ... 0     0	            0
+0	0	0	0 	... 0	0	0 ... 0	    0	            0
+
+where 
+Ds      is the count of deletions found for this position
+D1      is the count of reads with one base deletion starting at next position
+D2      is the count of reads with two base deletion starting at next position
+...
+I1      is the count of reads with one base insertion at the next position
+I2      is the count of reads with two base insertion at the next position
+...
+DelInfo is detailed deletion(s) information, for example, "0_1D_5627738_1" is
+        read with one base deletion after position 5627738 (at 5627739)
+InsInfo is detailed insertion(s) information including the insertion sequence
+
+
+The usage of the "noisetab" command is as follows:
+
+java Leucippus noisetab [options] file1.bam [file2.bam, ...]
+
+Options:
+        -interval FILE  file with intervals of targeted site
+        -ref      FILE  FASTA file with reference sequence (could be .gz file)
+        -q              base quality cut off 0-100 [20]
+        -d              distance cut off [-1]
+        -o        FILE  output file
+Input:
+        file1.bam       a file with aligned reads
+        file2.bam       a file with aligned reads
+
+
+Examples:
+
+java Leucippus noisetab \
+     -interval pathtosites/sites.txt \
+     -ref      pathtoreference/ref.fa.gz \
+     -o        pathtooutput/noisetable.tsv \
+     pathtobams/file01_LONG.bam pathtobams/file02_LONG.bam
+
+(example with custom 'samtools' directory)
+java Leucippus noisetab \
+     -interval pathtosites/sites.txt \
+     -ref      pathtoreference/ref.fa.gz \
+     -o        pathtooutput/noisetable.tsv \
+     -cfsam    pathtosamtools/bin \
+     pathtobams/file01_LONG.bam pathtobams/file02_LONG.bam
+
+(example with custom quality cut off, and distance cut off)
+java Leucippus noisetab \
+     -interval pathtosites/sites.txt \
+     -ref      pathtoreference/ref.fa.gz \
+     -o        pathtooutput/noisetable.tsv \
+     -q 20 -d 10 \
+     pathtobams/file01_LONG.bam pathtobams/file02_LONG.bam
+
+
+C. Command 'graph'
+------------------
+
+Leucippus can create graphs for substitution rates and p-values of random
+chance, for each nucleotide substitution type (i.e., C to T, etc.). The
+graphs are created from the noise table generated at the previous step and
+exclude the sites of interest (where Nuc_exp and Nuc_alt are not the same).
+Mismatches to the reference base in aligned long reads are assumed to be
+noise, either from sample preparation (e.g., amplification) or sequencing. A
+mutation rate graph shows the frequency of sites versus rate of a particular
+substitution type (e.g., C to T). A p-value graph shows the proportion of
+sites having substitution rate larger than a value. For example, for the
+expected nucleotide C, substitution type C to T, and substitution frequency
+of 0.01 the p-value is the fraction of C-sites having T substitution frequency
+larger than 0.01, i.e., #C_sites_with_CtoT_more_0.01/#C_sites. To make the
+graphs Leucippus calls an R script passing the necessary parameters to it.
+
+The usage of the "graph" command is as follows:
+
+Leucippus graph [options] -o <prefix> table1.file [table2.file]
+
+ Options:    -type            graph type: pvalue|mutrate [pvalue]
+             -coverage        minimum site/position coverage [100]
+             -range    DOUBLE maximum range for error [0.05]
+             -overlap  INT    use positions in overlapping 3'-ends of reads.
+                              The number specifies read length. Only useful 
+			      for analysis of amplicon-seq data
+             -o               prefix for output files: prefix.pdf,
+                                              prefix.fpvtb[1,2].tsv
+
+
+Second file with noise table is optional. If it is given, graphs from the two
+files will be superimposed, with colours representing substitution type and
+line style (solid and dashed) representing data from different files. Such
+visualization allows for instant comparison of noise level in different data.
+
+
+Examples:
+
+java Leucippus graph \
+	-o pathtooutput/graphortable \
+	-type pvalue \
+	pathtoinputnoisetable/MosaicNoiseTable.tsv
+	
+Example of Leucippus command that provides a path for R (graph):
+java Leucippus graph \
+	-o pathtooutput/graphortable \
+	-type pvalue \
+	-cfR ~/pathtoR \
+	pathtoinputnoisetable/MosaicNoiseTable.tsv
+
+Example of Leucippus command that provides range and coverage arguments:
+java Leucippus graph \
+        -o pathtooutput/graphortable \
+        -coverage 1000 \
+        -range 0.03 \
+        -type pvalue \
+        -cfR pathtoR \
+        pathtoinputnoisetable/MosaicNoiseTable.tsv
+
+Example of Leucippus command for comparison (graph):
+java Leucippus graph \
+	-o pathtooutput/graphortable \
+	-type pvalue \
+	pathtoinputnoisetable/MosaicNoiseTable1.tsv \
+	pathtoinputnoisetable/MosaicNoiseTable2.tsv
+
+
+D. Command 'decide'
+-------------------
+
+Leucippus can decide whether sites of interest are germline or somatic. By
+default sites with at least 35% non reference nucleotide coverage are termed
+germline.  The decision to call a variant as somatic is done by comparing
+the frequency of expected non reference nucleotide with the background
+substitution rate of reference to expected nucleotide. The background rate is
+derived from all sites in the noise table, excluding sites of interest and
+likely germline variants that have more than 10% of non reference nucleotide
+coverage. By default, sites with p-value of less than 0.05 are deemed somatic.
+Also, by default, sites with read coverage less than 100 reads are deemed as
+having insufficient data and omitted from decision process. The remaining sites
+are called undetermined, i.e., they are not germline, but frequency of 
+expected nucleotide is consistent with background.
+
+The input is a noise table described above for the section for 'noisetab'
+command. The output is a tab delimited file in the following format:
+
+CHR	POS	REF	EXP	COV	FREQ(#EXP/COV)	P-VALUE	CONCLUSION
+2	5627740	C	G	8107	0.00333045516	0.00131	somatic
+2	6912245	T	C	3305	0.00121028744	0.08378	unknown
+2	16266496	G	T	19691	0.47036	0.0	germline
+2	40177413	C	T	52788	0.05804	0.0	somatic
+2	47883415	A	G	152619	0.47365	0.0	germline
+2	60074304	A	T	27167	0.07026	0.0	somatic
+
+where:
+
+CHR is chromosome
+POS is position
+REF is the reference nucleotide
+EXP is the expected nucleotide (different than reference)
+COV is the site coverage(number of reads found, which include the site)
+FREQ is the number of expected nucleotides found, divided by site coverage
+P-VALUE is the p-value of the site being somatic
+CONCLUSION is the decision made for the site:
+         - germline       close to 50% allele frequency
+         - omitted        insufficient data (low coverage)
+         - somatic        p-value lower than threshold
+         - undetermined   not germline and with p-value higher than threshold.
+
+The usage of the "decide" command is as follows:
+
+ Leucippus decide [options] table.file
+
+   Options:  -o           FILE    results
+             -coverage            minimum site/position coverage [100]
+             -germlineAF  DOUBLE  minimum AF to call variant as germline [0.35]
+             -pvalue      DOUBLE  p-value for somatic call[0.05]
+
+Examples:
+
+Example of complete decide command (all parameters have been stated)
+java Leucippus decide \
+     -coverage 200 \
+     -germlineAF 0.35 \
+     -o pathtoresults/resultstable.tsv \
+     -pvalue 0.03
+     pathtoinput/noisetable.tsv
+
+Example of simplest Leucippus decide command with default values for 
+"-coverage[100], -germlineAF[0.35], -pvalue[0.05]":
+
+java Leucippus decide \
+     -o pathtoresults/resultstable.tsv \
+     pathtoinput/noisetable.tsv
+
+E. Command 'extract'
+--------------------
+Leucippus provides 'extract' command for read retrieval from bam files. User
+have to specify position and nucleotide in question. The returned reads will
+be those that present the nucleotide in question.
+ 
+The usage of the "extract" command is as follows:
+
+java Leucippus extract [options] file.bam
+
+Options: -o           FILE   results
+         -a                  alelle_X [X could be A,C,T,G]
+         -p                  chr:position in format according to bam
+                               (for examples, chr3:234234, 1:5454635)
+example:
+java Leucippus extract \
+     -o outfile.tsv \
+     -a T \
+     -p chr15:34563 \
+     /pathtobam/file.bam
+
+3. Configuration
+================
+Leucippus uses softwares samtools and R at various steps of calculations.
+To run these softwares it assumes that path to their binaries exists in the
+system PATH variable and that bash shell is run by /bin/bash. Additionally,
+it generates temporary folder 'Temp' in the current directory, to store
+temporary files during execution of 'noisetab' command. Path to the software,
+bash shell, and temporary folder can be redefined through configuration
+parameters. These parameters can be used with any command.
+
+Configuration Options:
+	-cfsam   <path to samtools executable [samtools]>
+	-cfR     <path to R executable [R]>
+	-cftmp   <path to temporary folder [./Temp]>
+	-cfbash  <path to bash shell [/bin/bash]>
+	-cfseparator  character.
+
+Examples:
+
+java Leucippus noisetab -interval pathtosites/intervalsites.txt \
+    -ref /pathtoref/GenomeRef.tsv \
+    -o pathtooutput/Table1.tsv \
+    -q 20 -d 0 \
+    -cfsam  pathtosamtools/my_samtools \
+    -cfbash pathtobash/my_bash \
+    -cftmp  pathtotmpfolder/my_tmp \
+     pathtoinputbam/longreads.bam
+
+java Leucippus graph \
+	-o pathtooutput/graphortable \
+	-type   pvalue \
+	-cfR    pathtoR/my_R \
+	-cfbash pathtobash/my_bash \
+	pathtoinputnoisetable/MosaicNoiseTable.tsv
+
+java Leucippus frag -o long.fq.gz \
+     -cfseparator #
+     pathtoreads/reads1.fastq.gz \
+     pathtoreads/reads2.fastq.gz
+
+
+Please send your comments and suggestions to Abyzov.Alexej@mayo.edu and to
+Vasmatzis.Nikolaos@mayo.edu
