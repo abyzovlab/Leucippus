@@ -266,7 +266,7 @@ public class Leucippus
 //		Get java version
 		String jv="";		
 		jv = ManagementFactory.getRuntimeMXBean().getSpecVersion();
-		System.out.println("java version :" + jv);
+		System.out.println("1 Java version : " + jv);
 //		Get java version
 
 //		 Declare Variables(END)
@@ -6093,7 +6093,6 @@ m++;
 
 	// CREATE TABLES(START)
 
-
 	// public static void RetrieveDataFromBam( String bash_path,
 	// String samtools_path,
 	// String results3_path,
@@ -6166,6 +6165,10 @@ m++;
 			System.out.println("ProcessEnded");
 		}
 		// writeToFile(temp_path + "/testerror.tsv", totaldatacol);
+		//if(totaldatacol.size()>100)
+		//	for(int i=0; i<100; i++)
+		//		System.out.println(totaldatacol.get(i));
+		//System.exit(0);
 		return totaldatacol;
 	}
 
@@ -6306,10 +6309,10 @@ m++;
 	 * coordinates for the locus are constructed and used to query all bam files.
 	 * The data lines returned from all bam files are filtered out using 
 	 * mapping quality >= 30. The remaining data will undergo a sequence(read) and
-	 * quality transformation. In sort by looking at the read position, and the cigar
+	 * quality transformation. In short by looking at the read position, and the cigar
 	 * information the sequence and its quality will be transformed in the 
 	 * following way : The read will start and end in the site range start and end 
-	 * points(reads that exced those points will be trimmed out; reads that are within
+	 * points(reads that exceed those points will be trimmed out; reads that are within
 	 * those points Ps will be added to the side(s). Eventully all reads after 
 	 * transformation will have the same start and end points. Before the transformation
 	 * process the reads are transformed acording to cigar( D(s) are added to the 
@@ -6317,7 +6320,7 @@ m++;
 	 * If there is N(s) information in cigar then lower case d(s) are added to the the
 	 * corresponding read positions in both read(sequence) and quality fields.
 	 * After this primary preparation all Read Nucleotides can be mapped directly to
-	 * the reference. In sort there is a primary treansformation that regains the length 
+	 * the reference. In short there is a primary treansformation that regains the length 
 	 * of read(expected); information for deletions and insertions also are retrieved 
 	 * along with the read. In the secondary transformation there is padding or trimming 
 	 * of the reads in such a way that all reads start and end at the same start and end
@@ -6376,6 +6379,13 @@ m++;
 // 	add example of returned String Vector element in each step
 // 	makeTables(bsh_pth, smtls_pth, input, output, perc, prmsv, bms, tmppath);
 //	04/26/216
+
+// 	05/02/2016
+//	Investigation for differences in 1.7 and 1.8 versions 
+//	in HndleCigSs method first fragment and first quality letter were removed from the array
+//	it appears that was some reason for this removal
+//	I will include the first elements and check if now it works
+// 	05/02/2016
 
 
 	public static void makeTables(String bash_path, String samtools_path,
@@ -6588,11 +6598,10 @@ m++;
 			}
 
 // ********************************************************************************************************************
-// ********************************************************************************************************************
-// ********************************************************************************************************************
 // inserted on 04/19/2016
 // *********************************************************************************************************************
-
+// ********************************************************************************************************************
+// ********************************************************************************************************************
 
 
 				// one part of the comparison <----
@@ -6683,9 +6692,12 @@ m++;
 						chromosome = cslwords[3];
 						// System.out.println(chromosome);
 						positions = cslwords[4];
+/*
 //  ***************************************************************************************************************
 //  ***************************************************************************************************************
-//					04/26/2016
+//					04/26/2016 reason split command in Java version 1.7
+//					create empty string as first element of the resulting array.
+//	Fix 			:	the split command was replaced with 'toCharArray' in 'PrepareTheDataAndInDls' method
 					if(jv.equals("1.8"))
 					{
 						crrposi = Integer.parseInt(positions)+1;
@@ -6695,7 +6707,7 @@ m++;
 //					04/26/2016
 //  ***************************************************************************************************************
 //  ***************************************************************************************************************
-
+*/
 
 						MAPQ = cslwords[5];
 						MAPQi = Integer.parseInt(MAPQ);
@@ -6726,14 +6738,25 @@ m++;
 					// System.out.println(cslwords[3]);
 				}
 
+
+
+
 				// if(h==2)
 //					writeToFile("/data5/experpath/vasm/vasm/NextGen/niko/pancreatic_capture110615/samples/1329805207/tables/data_Error_seq_Test.tsv", testError);
 //				System.out.println("Remained Vector Size : " + cursmlq.size());
 				
+
+
+
+
 				int totallines = cursmlq.size();
-				// // for (int k=0; k<totallines; k++)
-				// //cursmlq.set(k, cursmlq.get(k)+ "\t" + totallines);
+				//for (int k=0; k<totallines; k++)
+				//cursmlq.set(k, cursmlq.get(k)+ "\t" + totallines);
 				// System.out.println("JJJJJ----> Size = " + cursmlq.size());
+				writeToFile("/data5/experpath/vasm/vasm/NextGen/niko/TestLeuPrepMethod/test.tsv", cursmlq);
+				//for(int gint=0; gint<50; gint++)
+				//	System.out.println(vlns.get(gint));
+				//System.exit(0);
 				cursmlq = PrepareTheDataAndInDls(cursmlq);
 //				System.out.println("Size after Prepare The data: " + cursmlq.size());
 				// 03/16/2015 cursmlq contains prepared reads with additional
@@ -6750,6 +6773,7 @@ m++;
 				// writeToFile(tmppath + "/_" + h + "_" + h +
 				// "_test00hfgh7.tsv", PrimCumula);
 				// PrimCumula = new Vector<String>();
+			
 				for (int i2 = 0; i2 < cursmlq.size(); i2++) // go through each
 															// read(line)
 				{
@@ -6869,6 +6893,7 @@ m++;
 					// Distance / No Distance Contro
 
 				}
+
 //				System.out.println("Size after pading the data: " + vlns.size() + "  counter : " + ercnt);
 //				Retrieve paded data fo visualization
 //				if(h==2)
@@ -8338,18 +8363,26 @@ m++;
 						asize = asize + cnv.get(i1);
 				}
 
-				String[] fragpl = fragment.split(""); // fragment string
-														// character array
-				String[] qualpl = quality.split(""); // quality string character
-														// array
+
+				//String[] fragpl = fragment.split(""); // fragment string character array
+				//String[] qualpl = quality.split(""); // quality string character array
+				
+				char[] fragcr = fragment.toCharArray();				
+				char[] qualcr = quality.toCharArray();
+				String[] fragpl = new String[fragcr.length];
+				String[] qualpl = new String[qualcr.length];
+
+				for(int le=0; le<fragcr.length; le++)
+					fragpl[le]=Character.toString(fragcr[le]);
+				for(int le=0; le<qualcr.length; le++)
+					qualpl[le]=Character.toString(qualcr[le]);
 
 				ffrag = new Vector<String>(); // final transformed fragment
 				ffrag.addAll(Arrays.asList(fragpl));
-				ffrag.remove(0);
-
+				//ffrag.remove(0);
 				fqual = new Vector<String>(); // final transformed fragment
 				fqual.addAll(Arrays.asList(qualpl));
-				fqual.remove(0);
+				//fqual.remove(0);
 
 				String delsstr = "", ensstr="", inssstr = "";
 				delpoints = new Vector<Integer>();
@@ -8567,6 +8600,9 @@ m++;
 			// Position already includes the first place of length therefore to
 			// find read end actual position add length and subtract one
 		}
+		//for(int y=0; y<80; y++)
+			//System.out.println(secres.get(y));
+		//System.exit(0);
 
 		System.out.println("................Preparation  Ended.");
 		System.out.println("	End of 'PrepareTheData' Method!");
@@ -8737,19 +8773,41 @@ m++;
 					|| (clv.get(i1).equals("N")))
 						asize = asize + cnv.get(i1);
 				}
+//   05/07/2016	fragment.split("") and quality.split("") were creating inital empty string elements in java ver 1.7 
+//				String[] fragpl = fragment.split("");//fragment string	character array
+//				String[] qualpl = quality.split(""); // quality string character array
+//   ******************************************************************************************************************				
+//				ffrag = new Vector<String>(); // final transformed fragment
+//				ffrag.addAll(Arrays.asList(fragpl));
+//   ******************************************************************************************************************				
+//				ffrag.remove(0);
+//   ******************************************************************************************************************				
+//				fqual = new Vector<String>(); // final transformed fragment
+//				fqual.addAll(Arrays.asList(qualpl));
+//   ******************************************************************************************************************				
+//				fqual.remove(0);
+//   ******************************************************************************************************************				
+//   05/07/2016	fragment.split("") and quality.split("") were creating inital empty string elements in java ver 1.7
+//   The following code replaced split with toCharArray, then manually transform and add to String array and ther transform
+//   the string array to String Vector. It appears tha the issue has been fixed.   	
+				char[] fragcr = fragment.toCharArray();				
+				char[] qualcr = quality.toCharArray();
+				String[] fragpl = new String[fragcr.length];
+				String[] qualpl = new String[qualcr.length];
 
-				String[] fragpl = fragment.split(""); // fragment string
-														// character array
-				String[] qualpl = quality.split(""); // quality string character
-														// array
+				for(int le=0; le<fragcr.length; le++)
+					fragpl[le]=Character.toString(fragcr[le]);
+				for(int le=0; le<qualcr.length; le++)
+					qualpl[le]=Character.toString(qualcr[le]);
 
 				ffrag = new Vector<String>(); // final transformed fragment
 				ffrag.addAll(Arrays.asList(fragpl));
-				ffrag.remove(0);
 
 				fqual = new Vector<String>(); // final transformed fragment
 				fqual.addAll(Arrays.asList(qualpl));
-				fqual.remove(0);
+//		05/07/2016				
+
+
 
 				String delsstr = "", ensstr="", inssstr = "";
 				delpoints = new Vector<Integer>();
@@ -8967,6 +9025,10 @@ m++;
 			// Position already includes the first place of length therefore to
 			// find read end actual position add length and subtract one
 		}
+		for (int tset = 0; tset<400; tset++) // go through each
+			System.out.println(secres.get(tset));
+		System.exit(0);
+
 
 		System.out.println("................Preparation  Ended.");
 		System.out.println("	End of 'PrepareTheData' Method!");
