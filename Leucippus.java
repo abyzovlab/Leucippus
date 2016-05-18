@@ -4,7 +4,6 @@
  * @authors 3: Others
  * @version 1.0 Build 08/06/2015.
  * Description : Software for Noise Estimation
- *						
  */
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
