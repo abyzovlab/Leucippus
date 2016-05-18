@@ -9,7 +9,7 @@ import java.util.Vector;
 /**
  * 
  * @author :
- *
+ * test svn 04/25/2016
  * ProcessReads is a simple class that contains 'getNameCoNum', 'reverseComplement', and 'reverse' methods
  * The 'getNameId' method is not currently used.
  * It actually retrieves read name-type, it complement-reverses a read, and it reverses the base quality String  

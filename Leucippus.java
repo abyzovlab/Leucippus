@@ -30,6 +30,7 @@ import java.io.RandomAccessFile;
 import java.util.UUID;
 import java.net.URL;
 import java.util.Enumeration;
+import java.lang.management.ManagementFactory;
 public class Leucippus
 {
 	private static String[][] noisetable = new String[0][0];
@@ -54,6 +55,16 @@ public class Leucippus
 //	Each read line of the vector contains the origin (bam file name) the read name
 //  the modified read(according to cigar and position, the cigar, and the position.
 	private static Vector<String> missed_sites = new Vector<String>();
+
+
+	private static Vector<String> initprstrsends = new Vector<String> ();
+// 	Vector that was generated to hold initial site intervals
+//	It is used in make tables process and assists when distance filter is applied
+//  By storing the original intervals in this parallel Vector(with this of merged)
+//  all reads that have to high distance from all initial start points and end points are discarted
+//  (the start and end points of the read are checked in all corresponding initial intervals)
+//	if all checks discard the read then the read is discarded.
+	
 	/**
 	 * @param args : String array that holds user arguments
 	 * @throws InterruptedException
@@ -72,7 +83,7 @@ public class Leucippus
 				+ "	 noisetab	create noise table\n"
 				+ "	 graph		create graph\n"
 				+ "	 decide		decide [somatic | germline  | unknown | omitted]\n"
-				+ "	 extract 	extract reads that present alternative alelle\n\n"
+				+ "	 extract 	extract reads that present alternative allele\n\n"
 				+ "Config options: " + "	-cf+suffix <value> [none]\n\n";
 // 		General Information (END)
 // 		Specific Information (START)
@@ -93,6 +104,7 @@ public class Leucippus
 				+ "             -q              base quality cut off 0-100 [20]\n"
 				+ "             -pad            padding range at read ends [1]\n"
 				+ "             -d              distance cut off [-1]\n\n";
+				//+ "             -j              java version 1.7 or 1.8 [1.7]\n\n"; java version is retrieved internally
 
 		String graphinfo = "\nUsage: Leucippus graph [options] -o <prefix> table1.file [table2.file]\n\n"
 				+ "Options:    -type            graph type: pvalue|mutrate [pvalue]\n"
@@ -113,7 +125,7 @@ public class Leucippus
 
 		String extractinfo = "\nUsage: Leucippus extract [options] bam.file\n\n"
 				+ "Options: -o           FILE   results\n"
-				+ "         -a                  alelle_X [X could be A,C,T,G]\n"
+				+ "         -a                  allele_X [X could be A,C,T,G]\n"
 				+ "         -p                  chr:position\n\n";
 		
 		String confinfo = "\nUsage: Not specified. Instead Options are used.\n\n"
@@ -129,7 +141,11 @@ public class Leucippus
 
 // 		final argument arrays (START)
 		String[][] OverlapArgs = new String[8][2]; // frag
+//		String[][] TablesArgs =  new String[7][2]; // noisetab
 		String[][] TablesArgs =  new String[7][2]; // noisetab
+//		TablesArgs[7][0] = "javaversion";
+//		TablesArgs[7][1] = jv;
+
 		String[][] GraphsArgs =  new String[6][2]; // graph
 		String[][] DecideArgs =  new String[5][2]; // decide
 		String[][] ExtractArgs = new String[4][2]; // extract
@@ -246,8 +262,15 @@ public class Leucippus
 		double pvalued=0.0;
 		int k = 1, p = 0, dcuti = 500;
 		int lrlengi = 0, minvrlpi=0;
+
+//		Get java version
+		String jv="";		
+		jv = ManagementFactory.getRuntimeMXBean().getSpecVersion();
+		System.out.println("java version :" + jv);
+//		Get java version
+
 //		 Declare Variables(END)
-		
+
 		String cfpath = System.getProperty("user.dir");
 		String[][] cfargs = ArgsConfigCheck(args);
 		String bsh_pth = cfargs[0][1];
@@ -417,7 +440,7 @@ public class Leucippus
 					System.out.println(TablesArgs[o1][0] + "  "
 							+ TablesArgs[o1][1]);
 				}
-
+				System.out.println("Java Version " + jv);
 				System.out.println();
 				String perc = TablesArgs[3][1];
 				String input = "";
@@ -427,6 +450,7 @@ public class Leucippus
 				prmrs_pth = TablesArgs[1][1];
 				gref_pth = TablesArgs[5][1];
 				pad=TablesArgs[6][1];
+				//jversion=TablesArgs[7][1];
 				// prrfsqv = GenomeRefParser(prmrs_pth, gref_pth);
 				System.out.println("Request Genome reference sequences!");
 				prrfsqv = IndependentGenomeRefParser(prmrs_pth, gref_pth);
@@ -459,7 +483,7 @@ public class Leucippus
 				 */
 				System.out.println("main method 2 Proceed with Table!");
 				makeTables(bsh_pth, smtls_pth, input, output, perc, prrfsqv,
-						bms, tmppath, dcuti, pad);
+						bms, tmppath, dcuti, pad, jv);
 				k = 0;
 			}
 // 			noisetab (END)
@@ -2305,11 +2329,11 @@ public class Leucippus
 		return result; 
 	}
 
-	/**
-	 * @param argmns : String[]
-	 * @return resargs : Strjng[][]
-	 * @throws IOException
-	 **/
+
+
+
+
+
 	public static String[][] testArgsforTables(String[] argmns)
 			throws IOException {
 
@@ -2706,6 +2730,7 @@ public class Leucippus
 		}
 		return resargs;
 	}
+
 
     	// test graph (START)
 	/**
@@ -3417,11 +3442,19 @@ public class Leucippus
 			Exit();
 		}
 
-		String rnrscrpt = "src=" + tables_path + "; " + "dst=" + graphs_path
-				+ "; tp=" + mutratepvalue + "; gt=" + grortb + "; ov="
-				+ overlap + "; cov=" + coverages + "; gla=" + germlineAFs
-				+ "; " + rscript_path + " " + rscgrpth
-				+ " -s $src -d $dst -t $tp -h $gt -o $ov -c $cov -l $gla";
+//		String rnrscrpt = "src=" + tables_path + "; " + "dst=" + graphs_path
+//				+ "; tp=" + mutratepvalue + "; gt=" + grortb + "; ov="
+//				+ overlap + "; cov=" + coverages + "; gla=" + germlineAFs
+//				+ "; " + rscript_path + " " + rscgrpth
+//				+ " -s $src -d $dst -t $tp -h $gt -o $ov -c $cov -l $gla";
+		
+		String rnrscrpt = rscript_path + " " + rscgrpth + " src=" + tables_path + " " + "dst=" + graphs_path
+				+ " tp=" + mutratepvalue + " gt=" + grortb + " ov="
+				+ overlap + " cov=" + coverages + " gla=" + germlineAFs;
+				
+				//+ " -s $src -d $dst -t $tp -h $gt -o $ov -c $cov -l $gla";
+
+
 		System.out.println(rnrscrpt);
 		try {
 			ProcessBuilder pb = new ProcessBuilder("/bin/bash", "-c", rnrscrpt);
@@ -6336,13 +6369,18 @@ m++;
 	 * @throws IOException
 	 * @throws InterruptedException
 	 */
-	
+//	04/26/216
+//	Problem appeared while running the program with java version 8.0. ->
+//	It looks like the position returned from samtools coresponds to one position shifted to the right 
+
 // 	add example of returned String Vector element in each step
 // 	makeTables(bsh_pth, smtls_pth, input, output, perc, prmsv, bms, tmppath);
+//	04/26/216
+
 
 	public static void makeTables(String bash_path, String samtools_path,
 			String input, String output, String perc, Vector<String> prms,
-			Vector<String> bms, String tmppath, int dcuti, String pad) throws IOException,
+			Vector<String> bms, String tmppath, int dcuti, String pad, String jv) throws IOException,
 			InterruptedException {
 
 // **************************************************************************************************************************\\
@@ -6355,6 +6393,15 @@ m++;
 				outFilename));
 		BufferedWriter bw1 = new BufferedWriter(new OutputStreamWriter(gzipout));
 // **************************************************************************************************************************\\
+
+
+//	04/26/2016
+
+	int crrposi = 0;
+	String crrpos ="";
+
+//	04/26/2016
+
 
 		Vector<String> pmis = new Vector<String>();
 		for (int i = 0; i < percmis.length; i++)
@@ -6486,6 +6533,15 @@ m++;
 //		all three fields will have same 
 		int ercnt=0;
 		Vector<String> testError = new Vector<String>();
+// ********************************************************************************************************************
+// inserted on 04/19/2016		
+		int[][] istsends = new int[0][0];
+		String criintstends="", striintse="", iinstat="", iinend="";
+		int iinstati=0, iinendi=0, criinsti=0, criintedi=0;
+		boolean readpassed=false;
+// inserted on 04/19/2016
+// *********************************************************************************************************************
+
 
 // 05/03/2015 Changed to accept Chromosome X and Y		
 		String refidS="";
@@ -6501,6 +6557,44 @@ m++;
 			System.out.println("-------------------> " + prmline);
 			if (prwords.length > 1) // *************************************************************---------------------------------------------
 			{
+// ********************************************************************************************************************
+// ********************************************************************************************************************
+// ********************************************************************************************************************
+// inserted on 04/19/2016
+// ********************************************************************************************************************
+
+			istsends = new int[0][0];
+			iinstati=0;
+			iinendi=0;
+			criintstends="";
+			striintse="";
+			iinstat="";
+			iinend="";
+			criintstends = initprstrsends.get(h); 	// Global String Vector with initial start and ed interval points
+								// It is parallel to processed interval vector. The processed interval vector could 
+								// contain less intervals (if not sequence was returned from genome then the interval is discarded). 
+			String[] inseswds = criintstends.split(",");
+			istsends = new int[inseswds.length][2]; // update two dimensional Integer array to hold initial start[0] and end[1] interval pionts
+			for(int iint=0; iint<inseswds.length; iint++)
+			{
+				striintse = inseswds[iint];
+				String[] isiswd = striintse.split(" ");
+				iinstat=isiswd[0];
+				iinend=isiswd[1];
+				iinstati=Integer.parseInt(iinstat);
+				iinendi=Integer.parseInt(iinend);
+				istsends[iint][0]=iinstati;
+				istsends[iint][1]=iinendi;
+			}
+
+// ********************************************************************************************************************
+// ********************************************************************************************************************
+// ********************************************************************************************************************
+// inserted on 04/19/2016
+// *********************************************************************************************************************
+
+
+
 				// one part of the comparison <----
 				// cr startc endc ResSeq POS REF ALT
 				//  0   1     2     3     4   5   6
@@ -6589,6 +6683,20 @@ m++;
 						chromosome = cslwords[3];
 						// System.out.println(chromosome);
 						positions = cslwords[4];
+//  ***************************************************************************************************************
+//  ***************************************************************************************************************
+//					04/26/2016
+					if(jv.equals("1.8"))
+					{
+						crrposi = Integer.parseInt(positions)+1;
+						crrpos = Integer.toString(crrposi);
+						positions = crrpos;
+					}
+//					04/26/2016
+//  ***************************************************************************************************************
+//  ***************************************************************************************************************
+
+
 						MAPQ = cslwords[5];
 						MAPQi = Integer.parseInt(MAPQ);
 						cigar = cslwords[6];
@@ -6650,7 +6758,7 @@ m++;
 					String[] dawords = dataline.split("\t");
 //					refid = Integer.parseInt(dawords[0]);
 					refidS = dawords[0];
-					position = Integer.parseInt(dawords[1]);
+					position = Integer.parseInt(dawords[1]) ;
 					actualend = Integer.parseInt(dawords[2]);
 					datseq = dawords[3];
 					// System.out.println(" datseq : " + datseq);
@@ -6682,14 +6790,54 @@ m++;
 						// contains the paded sequence and its quality separated
 						// by tab.
 
+// ********************************************************************************************************************
+// ********************************************************************************************************************
+// ********************************************************************************************************************
+// inserted on 04/19/2016
+// ********************************************************************************************************************
 						// Distance / No Distance Control
-						if (dcuti != -1) {
+						if (dcuti != -1)
+						{
+							for(int tni=0; tni<istsends.length; tni++)
+							{
+								criinsti=0;
+								criintedi=0;
+								criinsti=istsends[tni][0];
+								criintedi=istsends[tni][1];
+								d1 = Math.abs(criinsti - position);
+								d2 = Math.abs(actualend - criintedi);
+								// System.out.println("d1 = " + d1 + "  d2 = " +
+								// d2);
+								if ((padedseq.length() > 2)
+									&& ((d1 < dcuti) && (d2 < dcuti)))
+								{
+								//	newline = refid + "\t" + refstart + "\t"
+									newline = refidS + "\t" + refstart + "\t"
+										+ actualend + "\t" + padedseq + "\t"
+										+ vDeletions + "\t" + vInsertions
+										+ "\t" + cigar + "\t" + rdnm + "\t"
+										+ smplnmi;
+									vlns.add(newline);
+									tni=istsends.length;
+								}
+							}
+						}
+// ********************************************************************************************************************
+// ********************************************************************************************************************
+// ********************************************************************************************************************
+// inserted on 04/19/2016
+// ********************************************************************************************************************
+/*
+						// Distance / No Distance Control
+						if (dcuti != -1)
+						{
 							d1 = Math.abs(refstart - position);
 							d2 = Math.abs(actualend - refend);
 							// System.out.println("d1 = " + d1 + "  d2 = " +
 							// d2);
 							if ((padedseq.length() > 2)
-									&& ((d1 < dcuti) && (d2 < dcuti))) {
+									&& ((d1 < dcuti) && (d2 < dcuti)))
+							{
 							//	newline = refid + "\t" + refstart + "\t"
 								newline = refidS + "\t" + refstart + "\t"
 										+ actualend + "\t" + padedseq + "\t"
@@ -6698,16 +6846,21 @@ m++;
 										+ smplnmi;
 								vlns.add(newline);
 							}
-						} else if (dcuti == -1) {
-							if (padedseq.length() > 2) {
+						}
+*/
+
+						else if (dcuti == -1)
+						{
+							if (padedseq.length() > 2) 
+							{
 								newline = refidS + "\t" + refstart + "\t"
-										+ actualend + "\t" + padedseq + "\t"
-										+ vDeletions + "\t" + vInsertions
-										+ "\t" + cigar + "\t" + rdnm + "\t"
-										+ smplnmi;
+									+ actualend + "\t" + padedseq + "\t"
+									+ vDeletions + "\t" + vInsertions
+									+ "\t" + cigar + "\t" + rdnm + "\t"
+									+ smplnmi;
 								vlns.add(newline);
 								if(h==2)
-								testError.add(padedseq);
+									testError.add(padedseq);
 							}
 						}
 
@@ -9879,7 +10032,8 @@ m++;
 
         File pr = new File(prm_pth);
         String prfnm = pr.getName();
-        Vector<String> prmsits = new Vector<String>(); 
+        Vector<String> prmsits = new Vector<String>();
+        Vector<String> orprmsits = new Vector<String>();
         // initial next sorted and next merge sites vector
         Vector<String> prmsfnl = new Vector<String>(); 
         // final returned sites vector (sorted merged and with sequences)
@@ -9887,14 +10041,14 @@ m++;
         // vector that controls the chromosomal flow of the loop
         // it gives sign for what list of sites(grouped in 
         // respect of chromosome) will be processed retrieve sort and merge 
-        prmsits = readTheFileIncludeFirstLine(prm_pth, prfnm);
-        prmsits = SortSites(prmsits);
+        orprmsits = readTheFileIncludeFirstLine(prm_pth, prfnm);
+        orprmsits = SortSites(orprmsits);
 	//for(int u=0; u<prmsits.size(); u++)
 		//System.out.println(prmsits.get(u));
         //  prmsits = MergeSamePosSites(prmsits);
 
 
-        prmsits = MergeOverlappinSites(prmsits);
+        prmsits = MergeOverlappinSites(orprmsits);
         //for (int i = 0; i < prmsits.size(); i++)
             //System.out.println(prmsits.get(i));
 	// Exit();
@@ -10153,9 +10307,120 @@ m++;
             for (int i = 0; i < missed_sites.size(); i++)
                 System.out.println(missed_sites.get(i));
         }
+        
+        initprstrsends = GenerateInitialIntervalList(orprmsits, prmsfnl);
+        
         return prmsfnl;
     }
 
+    
+
+// -------------------------------------------------------------------------------------- \\  
+// -------------------------------------------------------------------------------------- \\  
+// -------------------------------------------------------------------------------------- \\  
+//  The following methods populate a String vector. Each Vector String element 
+//	corresponds to all unique initial intervals contained in each merged interval call
+// The element contains interval1start-space-interval1end,interval2start-space-interval2end,...     
+// The index of each element correspond to the index of the particular merged interval(s)
+    public static Vector<String> GenerateInitialIntervalList(Vector<String> initprms, Vector<String> mrgdprmrs)
+	{
+		Vector<String> results2 = new Vector<String>();
+		String chromq="", positions="";
+		String chr="", pos="", lstrt="", rstrt="";
+		String line="", prline="";
+		String crslt="", crcum="", crcumtot="";
+		int[] sites = new int[0];
+		int posi=0, crstposi = 0; 
+		for(int i=0; i<mrgdprmrs.size(); i++)
+		{
+			line = mrgdprmrs.get(i);
+			String[] wds = line.split("\t");
+			chromq = wds[0];
+			positions = wds[4];
+			sites = convertToIntegerArray(positions);
+			for(int in=0; in<sites.length; in++)
+			{
+				crstposi = sites[in];
+				for(int pr=0; pr<initprms.size(); pr++)
+				{
+					prline = initprms.get(pr);
+					String[] ws = prline.split("\t");
+					chr=ws[0];
+					pos=ws[1];
+					lstrt=ws[4];
+					rstrt=ws[5];
+					posi = Integer.parseInt(pos);
+					if(chr.equals(chromq))
+						if(posi==crstposi)
+						{
+							crslt= lstrt + " " + rstrt;
+							crcumtot=crcumtot + crslt + ",";
+							
+							if(notinList(crcum, crslt))
+								crcum = crcum + crslt + ",";
+							pr=initprms.size();
+						}
+				}
+			}
+			results2.add(crcum);
+			//results3.add(crcumtot);
+			crcum="";
+			crcumtot="";
+		}
+		return results2;
+	}
+	
+	public static int[] convertToIntegerArray(String line)
+	{
+	
+		String[] numberStrs = line.split(",");
+		int[] numbers = new int[numberStrs.length];
+		for(int i = 0;i < numberStrs.length;i++)
+		{
+			numbers[i] = Integer.parseInt(numberStrs[i]);
+		}
+		return numbers;
+	}
+	
+	public static boolean notinList(String cum, String inq)
+	{
+		boolean rs = true;
+		String[] wds = cum.split(",");
+		String cr="";
+		for(int i=0; i<wds.length; i++)
+		{
+			cr=wds[i];
+			if(cr.equals(inq))
+				rs=false;
+		}
+		return rs;
+	}    
+    
+// -------------------------------------------------------------------------------------- \\  
+// -------------------------------------------------------------------------------------- \\  
+// -------------------------------------------------------------------------------------- \\  
+   
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 /**
  * Method that identifies overlapping sites referred to same chromosome.
  * It creates a common information about overlapping sites and updates the
@@ -10248,7 +10513,7 @@ m++;
 					chrmsite.set(k - 1, lincp);
 					chrmsite.removeElementAt(k);
 					//System.out.println("New : " + lincp);
-					k = 0;	
+					k = 0;
                  }
 			}
 			for (int o = 0; o < chrmsite.size(); o++)
@@ -10334,7 +10599,7 @@ m++;
 	/**
 
  	 * The following method is useful when alternative fields contain more than 
-	 * one nucleotides. It is called from 'MergeOverlappinSites' method.
+	 * one nucleotide. It is called from 'MergeOverlappinSites' method.
 	 * The combination of these methods is part of IndependentGenomeReferenceParser
 	 * process(retrieve reference sequences (noisetab command).   
 	 * The removeDuplicates method accepts a String with Letters
@@ -10344,7 +10609,7 @@ m++;
 	 * in a particular order
 	 * @param str
 	 * @return results 
-	 * Prerequisite: The passed String must not be nu
+	 * Prerequisite: The passed String must not be null
 	 */
 	public static String removeDuplicates(String str)
 	{
@@ -10652,7 +10917,7 @@ m++;
 	public static boolean isPosUnsignInteger(String qual)
 	{
 		boolean res = false;
-		if (qual.matches("\\d+"))
+		if (qual.matches("\\d+"))  
 			res = true;
 		return res;
 	}

@@ -10,29 +10,112 @@
 #-s $src -d $dst -t $tp -p $ppth
 
 #rm(list=ls())
-# install.packages("getopt")
-library('getopt')     #// to install:  
-spec = matrix(c( 'source'  , 's', 1, "character" , 
-                 'destination'  , 'd', 1, "character" ,
-		 'type'  , 't', 1, "character",
-		 'grortb'  , 'h', 1, "character",
-		 'overlap'  , 'o', 1, "character",
-		 'coverage'  , 'c', 1, "character",
-		 'germlineAFs'  , 'l', 1, "character"),byrow=TRUE, ncol=4);
 
-opt = getopt(spec); 
-source  = opt$source;
-destination = opt$destination;
-graphortable = opt$grortb;
-overlap = opt$overlap;
-cover = strtoi(opt$coverage);
-prf = as.numeric(opt$germlineAFs);
+# getopt library requirement was removed on 02/29/2016
+
+# install.packages("getopt")
+#library('getopt')     #// to install:  
+#spec = matrix(c( 'source'  , 's', 1, "character" , 
+#                'destination'  , 'd', 1, "character" ,
+#		 'type'  , 't', 1, "character",
+#		 'grortb'  , 'h', 1, "character",
+#		 'overlap'  , 'o', 1, "character",
+#		 'coverage'  , 'c', 1, "character",
+#		 'germlineAFs'  , 'l', 1, "character"),byrow=TRUE, ncol=4);
+
+#opt = getopt(spec); 
+#source  = opt$source;
+#destination = opt$destination;
+#graphortable = opt$grortb;
+#overlap = opt$overlap;
+#cover = strtoi(opt$coverage);
+#prf = as.numeric(opt$germlineAFs);
+#cover=cover-1
+#primers = opt$primers;
+#type = opt$type;
+
+
+#/usr/local/biotools/r/R-3.2.0/bin/Rscript /home/m026918/Leucippus/Test_R_Arguments/Pvalue_MutrateNoOpt.r src=/data5/experpath/vasm/vasm/NextGen/niko/MOSAICSALLDATA/i1_03_04_1_017_GTAGAG/tables/MosaicNoiseTable_BQ_gt_00.tsv,/data5/experpath/vasm/vasm/NextGen/niko/MOSAICSALLDATA/i1_03_04_1_017_GTAGAG/tables/MosaicNoiseTable_BQ_gt_20.tsv dst=/home/m026918/Leucippus/ppapue_graph.pdf tp=pvalue gt=grout ov=0 gla=0.99 cov=100
+
+#java Leucippus graph -type pvalue -coverage 100 -range 0.05 -overlap 100 -o ppvalout0007 /data5/experpath/vasm/vasm/NextGen/niko/MOSAICSALLDATA/i1_03_04_1_017_GTAGAG/tables/MosaicNoiseTable_BQ_gt_00.tsv
+
+
+# getopt library requirement was removed on 02/29/2016
+source = "";
+destination = "";
+graphortable = "";
+overlap = "";
+coverage = "";
+prf = 0;
+type = "";
+curarg="";
+curargvc=c("");
+cover=0;
+
+args <- commandArgs(trailingOnly = TRUE)
+#print("here");
+#print(args[1]);
+#print(args[2]);
+#print(args[3]);
+#print(args[4]);
+
+for (i in 1:length(args))
+{
+	curarg = args[i];
+	curargvc=strsplit(curarg, "=")
+	curargvc=curargvc[[1]];
+	if(length(curargvc)==2)
+	{
+
+		if(curargvc[1]=="src")
+		{
+			source=curargvc[2];
+			print(source);
+		}
+
+		if(curargvc[1]=="dst")
+		{
+			destination=curargvc[2];
+			print(destination);
+		}
+
+		if(curargvc[1]=="tp")
+		{
+			type=curargvc[2];
+			print(type);
+		}
+
+		if(curargvc[1]=="ov")
+		{
+			overlap=curargvc[2];
+			print(overlap);
+		}
+
+		if(curargvc[1]=="gt")
+		{
+			graphortable=curargvc[2];
+			print(graphortable);
+		}
+
+		if(curargvc[1]=="cov")
+		{
+			coverage=curargvc[2];
+			cover = strtoi(coverage);
+			print(coverage);
+		}
+
+		if(curargvc[1]=="gla")
+		{
+			germlineAFs=curargvc[2];
+			prf = as.numeric(germlineAFs);
+			print(prf);
+		}
+	}
+}
 cover=cover-1
 #primers = opt$primers;
-type = opt$type;
 oneortwo=0;
 # print(graphortable)
-
 
 # sourcepath = "/data5/experpath/vasm/vasm/NextGen/tomcat/apache-tomcat-7.0.42/MosaicsTablesGraphs021115mdy/i1/Tables/nd";
 # destination = "/data5/experpath/vasm/vasm/NextGen/tomcat/apache-tomcat-7.0.42/MosaicsTablesGraphs021115mdy/i1/Tables/GraphTest"
@@ -46,6 +129,8 @@ oneortwo=0;
 # excl= paste(prdfrm[,1], " ", prdfrm[,2], sep="") 
 
 # put all table names to a vector
+
+#/usr/local/biotools/r/R-3.2.0/bin/Rscript /home/m026918/Leucippus/Test_R_Arguments/Pvalue_MutrateNoOpt.r src=/data5/experpath/vasm/vasm/NextGen/niko/MOSAICSALLDATA/i1_03_04_1_017_GTAGAG/tables/MosaicNoiseTable_BQ_gt_00.tsv,/data5/experpath/vasm/vasm/NextGen/niko/MOSAICSALLDATA/i1_03_04_1_017_GTAGAG/tables/MosaicNoiseTable_BQ_gt_20.tsv dst=/home/m026918/Leucippus/ppapue_graph.pdf tp=pvalue gt=grout ov=0 gla=0.99 cov=100
 
 splat <- strsplit(source, ",")[[1]]
 tblnms=c();
