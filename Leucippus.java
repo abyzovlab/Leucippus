@@ -6753,7 +6753,7 @@ m++;
 				//for (int k=0; k<totallines; k++)
 				//cursmlq.set(k, cursmlq.get(k)+ "\t" + totallines);
 				// System.out.println("JJJJJ----> Size = " + cursmlq.size());
-				writeToFile("/data5/experpath/vasm/vasm/NextGen/niko/TestLeuPrepMethod/test.tsv", cursmlq);
+				//writeToFile("/data5/experpath/vasm/vasm/NextGen/niko/TestLeuPrepMethod/test.tsv", cursmlq);
 				//for(int gint=0; gint<50; gint++)
 				//	System.out.println(vlns.get(gint));
 				//System.exit(0);
