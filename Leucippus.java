@@ -31,9 +31,12 @@ import java.util.UUID;
 import java.net.URL;
 import java.util.Enumeration;
 import java.lang.management.ManagementFactory;
+import java.util.HashSet;
+import java.util.Set;
 public class Leucippus
 {
 	private static String[][] noisetable = new String[0][0];
+	private static int[][] totalbasecounts = new int[0][0];
 // 	Two dimensional String array used to hold table results
 	private static List<Double[]> dbtb = new ArrayList<Double[]>();
 // 	Data structure that is used to host arrays with various size.
@@ -64,12 +67,21 @@ public class Leucippus
 //  all reads that have to high distance from all initial start points and end points are discarted
 //  (the start and end points of the read are checked in all corresponding initial intervals)
 //	if all checks discard the read then the read is discarded.
-	
+
+
+// 08/08/2016
+//	We exclude all reads by Mapping quality And by delta D
+//	Then we exclude padded bases even if they include indel
+//	Now we can calculated coverage (used for indels)
+//	By applying base quality we calculate total expected for SNVs
+// 08/08/2016
+
 	/**
 	 * @param args : String array that holds user arguments
 	 * @throws InterruptedException
 	 * @throws IOException
 	 */
+
 	public static void main(String[] args) throws InterruptedException, IOException
 	{ 
 // 		Main method (START)
@@ -83,7 +95,8 @@ public class Leucippus
 				+ "	 noisetab	create noise table\n"
 				+ "	 graph		create graph\n"
 				+ "	 decide		decide [somatic | germline  | unknown | omitted]\n"
-				+ "	 extract 	extract reads that present alternative allele\n\n"
+				+ "	 extract 	extract reads that present alternative allele\n"
+				+ "	 posgraph 	create graph for particular postion(site)\n\n"
 				+ "Config options: " + "	-cf+suffix <value> [none]\n\n";
 // 		General Information (END)
 // 		Specific Information (START)
@@ -107,9 +120,9 @@ public class Leucippus
 				//+ "             -j              java version 1.7 or 1.8 [1.7]\n\n"; java version is retrieved internally
 
 		String graphinfo = "\nUsage: Leucippus graph [options] -o <prefix> table1.file [table2.file]\n\n"
-				+ "Options:    -type            graph type: pvalue|mutrate [pvalue]\n"
+				+ "Options:    -type             graph type: pvalue|mutrate [pvalue]\n"
 				+ "	    -coverage INT     minimum site/position coverage [100]\n"
-				+ "            -range    DOUBLE  maximum range for error [0.05]\n"
+				+ "            -range    DOUBLE  maximum range for error [0.005]\n"
 				+ "            -overlap  INT     use positions in overlapping 3'-ends of reads\n"
 				+ "                                (the number specifies read length and it is\n"
 				+ "                                 only useful for analysis of amplicon-seq data)\n\n"
@@ -117,6 +130,25 @@ public class Leucippus
 				+ "            -o               prefix for output files: prefix.pdf\n\n";
 //				+ "                                                      prefix.fpvtb[1,2].tsv\n\n";
 
+
+
+//	May 19 2016
+//	Java Leucipus posgraph -pos chr4:153253817 [table1 table2 table3 ...]
+//	Keep the same options as in graph
+
+		String posgraphinfo = "\nUsage: Leucippus posgraph [options] -o <prefix> [table1 table2 .... table(n)]\n\n"
+				+ "Options:    -type             graph type: pvalue|mutrate [pvalue]\n"
+				+ "            -pos              chr(x):position (x: 1-22, X, Y)[chr1:1000000]\n"
+				+ "	    -coverage INT     minimum site/position coverage [100]\n"
+				+ "            -range    DOUBLE  maximum range for error [0.05]\n"
+				+ "            -overlap  INT     use positions in overlapping 3'-ends of reads\n"
+				+ "                               (the number specifies read length and it is\n"
+				+ "                               only useful for analysis of amplicon-seq data)\n"
+//				+ "            -fpval           generate frequency p-value table\n"
+				+ "            -o                prefix for output files: prefix.pdf\n\n";
+//				+ "                                                      	prefix.fpvtb[	1,2].tsv\n\n";
+//	May 19 2016
+//
 		String decideinfo = "\nUsage: Leucippus decide [options] table.file\n\n"
 				+ "Options: -o           FILE    results\n"
 				+ "         -coverage            minimum site/position coverage [100]\n"
@@ -141,14 +173,14 @@ public class Leucippus
 
 // 		final argument arrays (START)
 		String[][] OverlapArgs = new String[8][2]; // frag
-//		String[][] TablesArgs =  new String[7][2]; // noisetab
 		String[][] TablesArgs =  new String[7][2]; // noisetab
-//		TablesArgs[7][0] = "javaversion";
-//		TablesArgs[7][1] = jv;
-
 		String[][] GraphsArgs =  new String[6][2]; // graph
 		String[][] DecideArgs =  new String[5][2]; // decide
 		String[][] ExtractArgs = new String[4][2]; // extract
+		String[][] PosGraphsArgs =  new String[7][2]; // posgraph
+
+//		TablesArgs[7][0] = "javaversion";
+//		TablesArgs[7][1] = jv;
 // 		final argument arrays (END)
 
 // 		Leucippus States(States 0 = no state, 1-4 = task state
@@ -169,20 +201,26 @@ public class Leucippus
 				state = 4;
 			if ((args[i].equals("extract")) && ((state == 0) || (state == 5)))
 				state = 5;
+			if ((args[i].equals("posgraph")) && ((state == 0) || (state == 6)))
+				state = 6;
+
 			if ((args[i].equals("frag"))
-					&& ((state == 2) || (state == 3) || (state == 4) || (state == 5)))
+					&& ((state == 2) || (state == 3) || (state == 4) || (state == 5) || (state == 6)))
 				doubleoccur = true;
 			if ((args[i].equals("noisetab"))
-					&& ((state == 1) || (state == 3) || (state == 4) || (state == 5)))
+					&& ((state == 1) || (state == 3) || (state == 4) || (state == 5) || (state == 6)))
 				doubleoccur = true;
 			if ((args[i].equals("graph"))
-					&& ((state == 1) || (state == 2) || (state == 4) || (state == 5)))
+					&& ((state == 1) || (state == 2) || (state == 4) || (state == 5) || (state == 6)))
 				doubleoccur = true;
 			if ((args[i].equals("decide"))
-					&& ((state == 1) || (state == 2) || (state == 3) || (state == 5)))
+					&& ((state == 1) || (state == 2) || (state == 3) || (state == 5) || (state == 6)))
 				doubleoccur = true;
 			if ((args[i].equals("extract"))
-					&& ((state == 1) || (state == 2) || (state == 3) || (state == 4)))
+					&& ((state == 1) || (state == 2) || (state == 3) || (state == 4) || (state == 6)))
+				doubleoccur = true;
+			if ((args[i].equals("posgraph"))
+					&& ((state == 1) || (state == 2) || (state == 3) || (state == 4) || (state == 5)))
 				doubleoccur = true;
 		}
 // 		Identify state (END)
@@ -236,6 +274,11 @@ public class Leucippus
 					Exit();
 				}
 
+				if ((args[i].equals("posgraph")) || (args[i].equals("-posgraph"))) {
+					System.out.println(posgraphinfo);
+					Exit();
+				}
+
 				if ((args[i].equals("config"))
 						|| (args[i].equals("configuration"))
 						|| (args[i].equals("-config"))
@@ -257,8 +300,12 @@ public class Leucippus
 		lrleng = "", separator="", gref_pth = "", pad="", 
 		intable = "", outdecide = "", coverages = "", germlineAFs = "", pvalues="", 
 		prmrs_pth = "", fragpipenp = "", minvrlps="", tables_path = "", 
-		graphs_path = "", graph_type = "", graphs_overlap = "", dcut = "",
-		outextract="", bamsextract="", positionextract="", alellextract="";
+		graphs_path = "", graph_type = "", graphs_overlap = "", graphs_range="", dcut = "",
+		outextract="", bamsextract="", positionextract="", alellextract="",
+		ptables_pre_path="", tempptable_path = "", pgraphs_path = "", pgraph_type = "", 
+		pgraphs_overlap = "", pcoverages="", pgraphs_range="", pgermlineAFs = "", posgrphs = "",
+		tmptbpth="", tempostblnm="";
+		File fl;
 		double pvalued=0.0;
 		int k = 1, p = 0, dcuti = 500;
 		int lrlengi = 0, minvrlpi=0;
@@ -269,7 +316,7 @@ public class Leucippus
 		System.out.println("1 Java version : " + jv);
 //		Get java version
 
-//		 Declare Variables(END)
+//		Declare Variables(END)
 
 		String cfpath = System.getProperty("user.dir");
 		String[][] cfargs = ArgsConfigCheck(args);
@@ -290,27 +337,26 @@ public class Leucippus
 // 		correspondence states : frag 1, noisetab 2, graph 3, decide 4, extract 5
 		if (state != 0) {
 
-			// Four "if" statements for the four states
-			// Each statement has a test "args" method call at the beginning
-			// If the arguments have errors then the testing method will
-			// provide an informative error message and then it will terminate
-			// the program.
-			// If the arguments are correct then the testing method will
-			// populate
-			// the corresponding two dimensional array (it holds modified
-			// arguments) and will returned here.
-			// Next the if statement will generate the final command method
-			// call. Once the final command method finishes its task 
-			// the main method terminates the program.
+		// Five "if" statements for five states
+		// Each statement has a test "args" method call at the beginning
+		// If the arguments have errors then the testing method will
+		// provide an informative error message and then it will terminate
+		// the program.
+		// If the arguments are correct then the testing method will
+		// populate the corresponding two dimensional array (it holds modified
+		// arguments) and will returned here.
+		// Next the if statement will generate the final command method
+		// call. Once the final command method finishes its task 
+		// the main method terminates the program.
 
-// 			frag (START) state 1
-			if (state == 1) {
-				System.out.println("Make Long Reads!  " + args.length);
+// 		frag (START) state 1
+		if (state == 1) {
+			System.out.println("Make Long Reads!  " + args.length);
 
-				BufferedReader br1 = null, br2 = null;
-				BufferedWriter bw = null;
-				GZIPOutputStream gzipout = null;
-				// gzipoutr1 = null, gzipoutr2 = null;
+			BufferedReader br1 = null, br2 = null;
+			BufferedWriter bw = null;
+			GZIPOutputStream gzipout = null;
+			// gzipoutr1 = null, gzipoutr2 = null;
 
 				GZIPInputStream gzip1 = null, gzip2 = null;
 				
@@ -500,7 +546,8 @@ public class Leucippus
 				graphs_path = GraphsArgs[2][1];
 				graphs_overlap = GraphsArgs[3][1];
 				coverages = GraphsArgs[4][1];
-				germlineAFs = GraphsArgs[5][1];
+				//germlineAFs = GraphsArgs[5][1];
+				graphs_range = GraphsArgs[5][1];
 
 				System.out.println("Graph Type " + GraphsArgs[0][0] + "  "
 						+ GraphsArgs[0][1]);
@@ -513,7 +560,8 @@ public class Leucippus
 				System.out.println("Coverage " + GraphsArgs[4][0] + "  "
 						+ GraphsArgs[4][1]);
 				System.out.println("Range " + GraphsArgs[5][0] + "  "
-						+ (1 - Double.parseDouble(GraphsArgs[5][1])));
+						+ (Double.parseDouble(GraphsArgs[5][1])));
+//						+ (1 - Double.parseDouble(GraphsArgs[5][1])));
 
 				if(rscrp_path.isEmpty())
 				{
@@ -529,7 +577,7 @@ public class Leucippus
 				System.out.println("main method 2 Proceed with Graph!\n\n");
 				CreateGraphs(graph_type, tables_path, graphs_path, rscrp_path,
 						bsh_pth, cfpath, grorpvtb, graphs_overlap, coverages,
-						germlineAFs);
+						graphs_range);
 			}
 // 			graph(END)
 
@@ -592,13 +640,147 @@ public class Leucippus
 			}
 // 			decide(END)
 
+
+// 			posgraph(START)
+			if (state == 6) {
+				// type, coverage, range, overlap, fpval(optional) o input
+				// 1 5 6 4 3 2
+				System.out.println("Make Position Graph! " + args.length);
+				// Thread.sleep(1000);
+				PosGraphsArgs = testArgsforPositionGraphs(args);
+				pgraph_type = PosGraphsArgs[0][1];
+				ptables_pre_path = PosGraphsArgs[1][1];
+				posgrphs = PosGraphsArgs[6][1];
+//				Change this to working directory
+				String tmp_pthpg = System.getProperty("user.dir");
+				UUID idptbl = UUID.randomUUID();
+	    			tempostblnm = String.valueOf(idptbl);
+	    			tmp_pthpg = tmp_pthpg + "/";
+				tmptbpth = tmp_pthpg + tempostblnm + ".tsv";
+//				Temporary table that must be deleted when graph is done	
+				tempptable_path = generatePosTable(ptables_pre_path, posgrphs, tmptbpth);
+				if(tempptable_path.equals("zero_table_lines"))
+				{
+					System.out.println("Position '" + posgrphs + " has not found in the input table(s).\nExit.\n");
+					Exit();
+				}
+				System.out.println("\nTemp position table : " + tmptbpth);
+				pgraphs_path = PosGraphsArgs[2][1];
+				pgraphs_overlap = PosGraphsArgs[3][1];
+				pcoverages = PosGraphsArgs[4][1];
+				// pgermlineAFs = PosGraphsArgs[5][1];
+				pgraphs_range = PosGraphsArgs[5][1];
+
+				System.out.println("Graph Type " + PosGraphsArgs[0][0] + "  "
+						+ PosGraphsArgs[0][1]);
+				System.out.println("Output " + PosGraphsArgs[2][0] + "  "
+						+ PosGraphsArgs[2][1]);
+				System.out.println("Overlap " + PosGraphsArgs[3][0] + "  "
+						+ PosGraphsArgs[3][1]);
+				System.out.println("Coverage " + PosGraphsArgs[4][0] + "  "
+						+ PosGraphsArgs[4][1]);
+				System.out.println("Range " + PosGraphsArgs[5][0] + "  "
+						+ (Double.parseDouble(PosGraphsArgs[5][1])));
+						// + (1 - Double.parseDouble(PosGraphsArgs[5][1])));
+				System.out.println("Position " + PosGraphsArgs[6][0] + "  "
+						+ PosGraphsArgs[6][1]);
+				System.out.println("Input Table(s) " + PosGraphsArgs[1][0] + "  "
+						+ PosGraphsArgs[1][1]);
+				if(rscrp_path.isEmpty())
+				{
+					System.out.println("R script executable has not been provided.\nExit.");
+					Exit();
+				}
+
+				// added to provide option for creation of frequency-p-value
+				// table
+				grorpvtb = PosGraphsArgs[2][0];
+
+				
+				System.out.println("main method 6 Proceed with Position Graph!\n\n");
+				CreateGraphs(pgraph_type, tempptable_path, pgraphs_path, rscrp_path,
+						bsh_pth, cfpath, grorpvtb, pgraphs_overlap, pcoverages,
+						pgraphs_range);
+
+				System.out.println("graph or pvalue table : " + grorpvtb);
+				fl = new File(tempptable_path);
+				if(fl.exists())
+				{
+					System.out.println(fl.getName());
+					fl.delete();
+				}
+				//System.out.println("main method 6 Proceed with Position Graph!\n\n");
+//				CreatePosGraphs(pgraph_type, ptables_path, pgraphs_path, rscrp_path,
+//						bsh_pth, cfpath, grorpvtb, pgraphs_overlap, pcoverages,
+//						pgermlineAFs, posgrphs);
+			}
+// 			posgraph(END)
+
 		}
 // 		STATES(END)
 		System.out.println("End of Main method!");
-	} 
+	}
+
 // 	Main method(END)
 
-	/**
+
+	public static String generatePosTable(String ptables_pre_path, String posgrphs, String respth) throws IOException, InterruptedException
+	{
+		String chrq="", posq="";
+		String[] wdpsq = posgrphs.split(":");
+	 	chrq=wdpsq[0];
+		posq=wdpsq[1];
+		Vector<String> crvect = new Vector<String>();
+		Vector<String> resvect = new Vector<String>();
+
+		String crtbpth="", fnm="", recrpos="";		
+		File fl;
+		String[] wds = ptables_pre_path.split(",");
+		String line="", crchr="", crpos="", crref="", cralt=""; 		
+		
+		for(int i=0; i<wds.length; i++)
+		{
+			crtbpth=wds[i];
+			if(testFileExistence(crtbpth))
+			{
+				fl = new File(crtbpth);
+				fnm = fl.getName();
+				crvect = new Vector<String>();
+				crvect = readTheFileIncludeFirstLine(crtbpth, fnm);
+				if(i==0)
+					resvect.add(crvect.get(0));
+			
+				for(int j=1; j<crvect.size(); j++)
+				{
+					String[] wfds = crvect.get(j).split("\t");
+					crchr = wfds[0];
+					crpos =	wfds[1];
+					if( (crchr.equals(chrq)) && (crpos.equals(posq)) )
+					{
+						resvect.add(crvect.get(j));
+						j=crvect.size();
+					}
+				}
+			}
+			
+			else
+			{
+				System.out.println("file : " + crtbpth +"\ndoesn't exist.");
+			}
+		}
+		if(resvect.size()>1)
+			writeToFile(respth, resvect);
+		else
+			respth="zero_table_lines";
+		System.out.println(resvect.size()-1 + " position-lines have been found.");
+//		for(int i=0; i<resvect.size(); i++)
+//			System.out.println(resvect.get(i));
+		return respth;
+	}
+	
+
+
+/**
 	 * Method that checks for validity of user entered arguments. The method
 	 * performs three tasks. It tests the paths/files if they exist. In returned
 	 * two dimensional array usually it populates the [x][0] element with an
@@ -611,7 +793,7 @@ public class Leucippus
 	 *             (the method was designed to read a configuration file; now it
 	 *             tests for path existence)
 	 * 
-	 */
+**/
 	public static String[][] ArgsConfigCheck(String[] argmns)
 			throws IOException {
 	    // ArgsConfigCheck method (START)
@@ -2746,7 +2928,8 @@ public class Leucippus
 		String graphinfo = "\nUsage: leucippus graph [options] -o <prefix> table1.file [table2.file]\n\n"
 				+ "Options:    -type            graph type: pvalue|mutrate [pvalue]\n"
 				+ "	    -coverage        	minimum site/position coverage [100]\n"
-				+ "            -range  DOUBLE  minimum cutoff to exclude germline from noise graph [0.95]\n"
+				+ "            -range  DOUBLE  minimum cutoff to exclude germline from noise graph [0.05]\n"
+//				+ "            -range  DOUBLE  minimum cutoff to exclude germline from noise graph [0.95]\n"
 				+ "                                found/expected when base found is same as reference(expected) base\n"
 				+ "            -overlap INT     use positions in overlapping 3'-ends of reads.\n"
 				+ "                             The number specifies read length.\n"
@@ -2768,7 +2951,7 @@ public class Leucippus
 		resargs[4][0] = "";
 		resargs[4][1] = "0";
 		resargs[5][0] = "";
-		resargs[5][1] = "0.95";
+		resargs[5][1] = "";
 		double rangedb = 0.0, fnrgdb = 0.0;
 
 		String grtst = "", crarg = "", ranges = "";
@@ -2781,7 +2964,7 @@ public class Leucippus
 		File outfl, inpfl;
 		String correct_report = "", missed_report = "", tbinf = "";
 		String cucrinf = "", cumsinf = "", ftbstr = "";
-		int typecnt = 0, tbsrcecnt = 0, grphoutcnt = 0, fpvalcnt = 0, ovrlapcnt = 0, cvcnt = 0, grmlcnt = 0, tbfcnt = 0;
+		int typecnt = 0, tbsrcecnt = 0, grphoutcnt = 0, fpvalcnt = 0, ovrlapcnt = 0, cvcnt = 0, rngcnt = 0, tbfcnt = 0;
 		;
 		// , gprmcnt=0;
 		// constuct a common (type + fpval) string and keep only one version
@@ -2802,7 +2985,7 @@ public class Leucippus
 				if (argmns[i].equals("-overlap"))
 					ovrlapcnt = ovrlapcnt + 1;
 				if (argmns[i].equals("-range"))
-					grmlcnt = grmlcnt + 1;
+					rngcnt = rngcnt + 1;
 				if (argmns[i].equals("-fpval")) {
 					fpvalcnt = fpvalcnt + 1;
 					resargs[2][0] = resargs[2][0] + "fpval";
@@ -2840,7 +3023,7 @@ public class Leucippus
 		// System.out.println("testArgsforGraphs method  2 ");
 
 		if ((typecnt > 1) || (tbsrcecnt > 1) || (grphoutcnt > 1)
-				|| (ovrlapcnt > 1) || (cvcnt > 1) || (grmlcnt > 1)) {
+				|| (ovrlapcnt > 1) || (cvcnt > 1) || (rngcnt > 1)) {
 			System.out.println("Arguments must be stated once. \n Exit");
 			Exit();
 		}
@@ -2863,11 +3046,11 @@ public class Leucippus
 			corcnt = corcnt + 1;
 		}
 		// System.out.println("grmlcnt  : " + grmlcnt);
-		if (grmlcnt == 0) {
+		if (rngcnt == 0) {
 			System.out
-					.println("range default valuew will be used : range = 0.95");
-			resargs[5][0] = "range";
-			resargs[5][1] = "0.95";
+					.println("range default value will be used : default range = 0.005");
+			resargs[5][0] = "rangedef";
+			resargs[5][1] = "0.005";
 			corcnt = corcnt + 1;
 		}
 
@@ -2983,16 +3166,16 @@ public class Leucippus
 
 						if (rangedb >= 0 && rangedb <= 1) {
 
-							fnrgdb = 1 - rangedb;
+							fnrgdb = rangedb;
 							resargs[5][1] = Double.toString(fnrgdb);
 							resargs[5][0] = "range";
 							System.out.println("range : " + rangedb + " OK!");
 							corcnt = corcnt + 1;
 						} else {
 							System.out
-									.println("range value error, default = 0.05  OK");
-							resargs[5][0] = "range";
-							resargs[5][1] = "0.95";
+									.println("range value error, default range = 0.005  OK");
+							resargs[5][0] = "rangedef";
+							resargs[5][1] = "0.005";
 							corcnt = corcnt + 1;
 						}
 					}
@@ -3053,9 +3236,9 @@ public class Leucippus
 		}
 
 		if (resargs[5][0].isEmpty()) {
-			resargs[5][0] = "range";
-			resargs[5][1] = "0.95";
-			System.out.println("range value error, default = 0.05  OK");
+			resargs[5][0] = "rangedef";
+			resargs[5][1] = "0.005";
+			System.out.println("range value error, default range = 0.005  OK");
 			corcnt = corcnt + 1;
 		}
 
@@ -3080,6 +3263,453 @@ public class Leucippus
 	}
     // test graph (END)
  
+   // test  posgraph (START)
+	public static String[][] testArgsforPositionGraphs(String[] argmns)
+			throws IOException, InterruptedException {
+		System.out.println("testArgsforPositionGraphs method Start!\n");
+		String posgraphinfo = "\nUsage: Leucippus posgraph [options] -o <prefix> [table1 table2 .... table(n)]\n\n"
+				+ "Options:    -type             graph type: pvalue|mutrate [pvalue]\n"
+				+ "            -pos              chr(x):position (x: 1-22, X, Y)[chr1:1000000]\n"
+				+ "	    -coverage INT     minimum site/position coverage [100]\n"
+				+ "            -range    DOUBLE  maximum range for error [0.05]\n"
+				+ "            -overlap  INT     use positions in overlapping 3'-ends of reads\n"
+				+ "                               (the number specifies read length and it is\n"
+				+ "                               only useful for analysis of amplicon-seq data)\n"
+				+ "            -o                prefix for output files: prefix.pdf\n\n";
+//				+ "            -fpval           generate frequency p-value table\n"
+//				+ "                             prefix.fpvtb[	1,2].tsv\n\n";
+
+
+/*
+		String graphinfo = "\nUsage: leucippus graph [options] -o <prefix> table1.file [table2.file]\n\n"
+				+ "Options:    -type            graph type: pvalue|mutrate [pvalue]\n"
+				+ "	    -coverage        	minimum site/position coverage [100]\n"
+				+ "            -range  DOUBLE  minimum cutoff to exclude germline from noise graph [0.95]\n"
+				+ "                                found/expected when base found is same as reference(expected) base\n"
+				+ "            -overlap INT     use positions in overlapping 3'-ends of reads.\n"
+				+ "                             The number specifies read length.\n"
+				+ "                             Only useful for analysis of amplicon-seq data.\n"
+				+ "            -fpval           generate frequency p-value table\n"
+				+ "            -o               prefix for output files: prefix.pdf,\n"
+				+ "                                                      prefix.fpvtb[1,2].tsv\n\n";
+		System.out.println("\ntestArgsforPosGraphs method Start ------------");
+*/
+
+
+
+
+		String tblpthstr = "";
+		String[][] resargs = new String[7][2];
+		resargs[0][0] = "type";
+		resargs[0][1] = "";
+		resargs[1][0] = "checkTable(s)"; // String that could contain or more table names table(absolutepaths)
+		resargs[2][0] = "";
+		resargs[3][0] = "dfault";
+		resargs[3][1] = "0"; // Default overlap value = 0
+		resargs[4][0] = "";
+		resargs[4][1] = "0";
+		resargs[5][0] = "";
+		resargs[5][1] = "";
+		resargs[6][0] = "none";
+		resargs[6][1] = "chr1:1000000";
+		double rangedb = 0.0, fnrgdb = 0.0;
+		int atleastonetable = 0;
+		String grtst = "", crarg = "", ranges = "";
+		String type = "", tbsrce = "", grphout = "", overlaps = "", coverages = "", germlineAFs = "";
+		// gprim="";
+		int overlapi = 0, corcnt = 0;
+		;
+		String root_pth = "", inpth = "", flpth = "";
+		String ftnm = "", jcur = "";
+		File outfl, inpfl;
+		String correct_report = "", missed_report = "", tbinf = "";
+		String cucrinf = "", cumsinf = "", ftbstr = "";
+				
+		int typecnt = 0, tbsrcecnt = 0, grphoutcnt = 0, fpvalcnt = 0, 
+		ovrlapcnt = 0, cvcnt = 0, rngcnt = 0, poscnt=0, tbfcnt = 0;
+		String posstr="", chrom="", positions="";
+		int chri=0, posi=0;
+		// , gprmcnt=0;
+		// constuct a common (type + fpval) string and keep only one version
+		// ("groutfpval")
+
+		for (int i = 0; i < argmns.length; i++) {
+			if (argmns[i] != null) {
+				if (argmns[i].equals("-type"))
+					typecnt = typecnt + 1;
+
+				if (argmns[i].equals("-coverage"))
+					cvcnt = cvcnt + 1;
+
+				if (argmns[i].equals("-o")) {
+					grphoutcnt = grphoutcnt + 1;
+					resargs[2][0] = resargs[2][0] + "posgrout";
+				}
+				if (argmns[i].equals("-overlap"))
+					ovrlapcnt = ovrlapcnt + 1;
+				if (argmns[i].equals("-range"))
+					rngcnt = rngcnt + 1;
+				if (argmns[i].equals("-pos"))
+					poscnt = poscnt + 1;
+				if (argmns[i].equals("-fpval")) {
+					fpvalcnt = fpvalcnt + 1;
+					resargs[2][0] = resargs[2][0] + "fpval";
+				}
+			}
+		}
+
+		if ((argmns[argmns.length - 1].equals("-overlap"))
+				|| (argmns[argmns.length - 1].equals("-range"))
+				|| (argmns[argmns.length - 1].equals("-coverage"))
+				|| (argmns[argmns.length - 1].equals("-type"))
+				|| (argmns[argmns.length - 1].equals("-pos"))
+				|| (argmns[argmns.length - 1].equals("-o"))
+				|| (argmns[argmns.length - 2].equals("-overlap"))
+				|| (argmns[argmns.length - 2].equals("-range"))
+				|| (argmns[argmns.length - 2].equals("-coverage"))
+				|| (argmns[argmns.length - 2].equals("-type"))
+				|| (argmns[argmns.length - 2].equals("-pos"))
+				|| (argmns[argmns.length - 2].equals("-o"))) {
+			tbinf = "tablemiss";
+			resargs[1][0] = tbinf;
+			tbsrcecnt = 0;
+			System.out.println("Missing Table(s) as Argument(s) at the end. \n Exit");
+			Exit();
+		} else {
+			tbsrcecnt = tbsrcecnt + 1;
+			resargs[1][0] = "TableExpect";
+		}
+		//
+
+		if ((resargs[2][0].equals("groutfpval"))
+				|| (resargs[2][0].equals("fpvalgrout")))
+			resargs[2][0] = "groutfpval";
+		System.out.println("graph  : " + resargs[2][0]);
+
+		// System.out.println("testArgsforGraphs method  2 ");
+
+		if ((typecnt > 1) || (tbsrcecnt > 1) || (grphoutcnt > 1)
+				|| (ovrlapcnt > 1) || (cvcnt > 1) || (rngcnt > 1) || (poscnt > 1)) {
+			System.out.println("Arguments must be stated once. \n Exit");
+			Exit();
+		}
+
+		if ((tbsrcecnt == 0) || ((grphoutcnt == 0) && (fpvalcnt == 0))) {
+			System.out
+					.println("Table(s) input, (graph output or table output (path-prefix) are required.\n Exit");
+			System.out.println("typecnt = " + typecnt + " tablecnt = "
+					+ tbsrcecnt + " outcnt = " + grphoutcnt
+					+ " optional coverage " + cvcnt);
+			Exit();
+		}
+
+		if (cvcnt == 0) {
+			resargs[4][1] = "100";
+			System.out
+					.println("Coverage default value will be used : Coverage = "
+							+ resargs[4][1]);
+			resargs[4][0] = "coveragedef";
+			corcnt = corcnt + 1;
+		}
+		// System.out.println("grmlcnt  : " + grmlcnt);
+		if (rngcnt == 0) {
+			System.out
+					.println("range default value will be used : default range = 0.005");
+			resargs[5][0] = "rangedef";
+			resargs[5][1] = "0.005";
+			corcnt = corcnt + 1;
+		}
+
+		if (resargs[1][0].equals("TableExpect")) {
+			for (int i = argmns.length - 1; i >= 2; i--) {
+				if ((argmns[i - 1].equals("-fpval"))
+						|| ((!(isNumeric(argmns[i]))) && (!(argmns[i - 1]
+								.charAt(0) == '-')))
+						|| (isNumeric(argmns[i - 1]))) {
+					jcur = argmns[i];
+					inpfl = new File(crarg);
+					ftnm = inpfl.getName();
+					if (jcur.equals(ftnm)) {
+						root_pth = new java.io.File(".").getCanonicalPath();
+						root_pth = root_pth + "/";
+						jcur = root_pth + ftnm;
+					}
+					if (testFileExistence(jcur))
+					{
+						System.out.println("input table file exists : " + jcur);
+						atleastonetable=atleastonetable+1;
+						tbfcnt = tbfcnt + 1;
+						if (tbfcnt == 1)
+							tbsrce = jcur;
+						if (tbfcnt > 1)
+							tbsrce = tbsrce + "," + jcur;
+					} else if (!(testFileExistence(jcur)))
+						System.out.println("table file '" + jcur
+								+ "' not found.");
+				} else if (argmns[i - 1].charAt(0) == '-')
+					i = 1;
+			}
+		}
+
+		System.out.println("-----   " + tbsrce);
+		if (!(tbsrce.equals("")))
+		{
+			String[] wds = tbsrce.split(",");
+			resargs[1][1] = tbsrce;
+			resargs[1][0] = "Tables_" + wds.length;
+		
+/*
+			if (wds.length > 2) {
+				System.out
+						.println("Exceeded maximum of two input tables.\nExit.");
+				Exit();
+			}
+			if (wds.length == 2) {
+				ftbstr = wds[1] + "," + wds[0];
+				resargs[1][0] = "tbftwo";
+				resargs[1][1] = ftbstr;
+				corcnt = corcnt + 1;
+			}
+			if (wds.length == 1) {
+				ftbstr = wds[0];
+				resargs[1][0] = "tbfone";
+				resargs[1][1] = ftbstr;
+				corcnt = corcnt + 1;
+			}
+*/
+		}
+
+		for (int i = 0; i < argmns.length; i++) {
+			if (argmns[i].equals("-type")) {
+				if (i < argmns.length - 1) {
+					type = argmns[i + 1];
+					if ((type.equals("pvalue")) || (type.equals("mutrate"))) {
+						resargs[0][1] = type;
+						System.out.println("graph type OK!");
+						corcnt = corcnt + 1;
+					} else {
+						System.out
+								.println("graph type not found.\ngraph type default = pvalue  OK");
+						resargs[0][1] = "pvalue";
+						corcnt = corcnt + 1;
+					}
+				}
+			}
+
+			if (argmns[i].equals("-overlap")) {
+				if (i < argmns.length - 1) {
+					overlaps = argmns[i + 1];
+					if (isPosUnsignInteger(overlaps)) {
+						resargs[3][1] = overlaps;
+						resargs[3][0] = "overlap";
+						System.out.println("overlap OK!");
+						corcnt = corcnt + 1;
+					} else {
+						System.out
+								.println("overlap cutoff value error, default = 0  OK");
+						resargs[3][0] = "overlap";
+						corcnt = corcnt + 1;
+					}
+				}
+			}
+
+			if (argmns[i].equals("-coverage")) {
+				if (i < argmns.length - 1) {
+					coverages = argmns[i + 1];
+
+					if (isPosUnsignInteger(coverages)) {
+						resargs[4][1] = coverages;
+						resargs[4][0] = "coverage";
+						System.out.println("coverages OK!");
+						corcnt = corcnt + 1;
+					} else {
+						resargs[4][1] = "100";
+						System.out.println("coverage value error, default = "
+								+ resargs[4][1] + " OK");
+						resargs[4][0] = "coveragedef";
+						corcnt = corcnt + 1;
+					}
+				}
+			}
+
+			if (argmns[i].equals("-range")) {
+				if (i < argmns.length - 1) {
+					ranges = argmns[i + 1];
+					// System.out.println(ranges);
+					if (isNumeric(ranges)) {
+						rangedb = Double.parseDouble(ranges);
+
+						if (rangedb >= 0 && rangedb <= 1) {
+
+							fnrgdb = rangedb;
+							resargs[5][1] = Double.toString(fnrgdb);
+							resargs[5][0] = "range";
+							System.out.println("range : " + rangedb + " OK!");
+							corcnt = corcnt + 1;
+						} else {
+							System.out
+									.println("range value error, default range = 0.005  OK");
+							resargs[5][0] = "rangedef";
+							resargs[5][1] = "0.005";
+							corcnt = corcnt + 1;
+						}
+					}
+				}
+			}
+
+			if (argmns[i].equals("-pos")) {
+				if (i < argmns.length - 1)
+				{
+					posstr = argmns[i + 1];
+					String[] wdsps = posstr.split(":");
+					if(wdsps.length==2)
+					{
+					//	posstr="", chrom="", positions="";
+					//	int chri=0, posi=0;
+						//chrom=wdsps[0];
+						chrom=retrieveNumbOrLetter(wdsps[0]);
+						System.out.println(wdsps[0]);
+						positions=wdsps[1];
+						posstr=chrom + ":" + positions;
+						System.out.println(chrom + ":" + positions);
+						if( (isChromosome(chrom)) && (isPosUnsignInteger(positions)) )
+						{
+							resargs[6][1] = posstr;
+							resargs[6][0] = "position";
+							System.out.println("position is OK!");
+							corcnt = corcnt + 1;
+						}
+						else
+						{
+							System.out
+								.println("position has errors.\nExit.");	
+							//corcnt = corcnt + 1;
+						}
+					}
+				}
+			}
+
+			if (argmns[i].equals("-o")) {
+				if (i < argmns.length - 1) {
+					if (argmns[i + 1].charAt(0) != '-') {
+						grtst = "";
+						grtst = argmns[i + 1];
+						outfl = new File(grtst);
+						flpth = outfl.getName();
+						System.out
+								.println("Graph |& frq-pv-tab out : " + flpth);
+						// System.out.println("Out!");
+						if (grtst.equals(flpth)) {
+							root_pth = new java.io.File(".").getCanonicalPath();
+							jcur = root_pth + "/" + flpth;
+							// System.out.println("In!");
+						} else
+							jcur = grtst;
+
+						if (testParentDirectoryExistence(jcur)) {
+							grphout = jcur;
+							resargs[2][1] = grphout;
+							corcnt = corcnt + 1;
+							System.out.println("graph directory exists OK!");
+							System.out.println("graph path = " + grphout);
+						} else
+							System.out.println("graph directory not found.");
+					}
+				}
+			}
+		}
+
+		if (resargs[0][1].equals("")) {
+			resargs[0][1] = "pvalue";
+			System.out
+					.println("graph type not found.\ngraph type default = pvalue  OK");
+			corcnt = corcnt + 1;
+		}
+
+		if (resargs[2][0].equals("fpval")) {
+			System.out
+					.println("graph type default = pvalue  OK.\nOnly table(s) will be provided.");
+			resargs[0][1] = "pvalue";
+		}
+
+		if (resargs[3][0].equals("dfault"))
+
+		{
+
+			System.out.println("graph -overlap default = 0 cutoff OK.");
+			resargs[3][1] = "0";
+			resargs[3][0] = "overlap";
+			corcnt = corcnt + 1;
+		}
+
+		if (resargs[5][0].isEmpty()) {
+			resargs[5][0] = "rangedef";
+			resargs[5][1] = "0.005";
+			System.out.println("range value error, default range = 0.005  OK");
+			corcnt = corcnt + 1;
+		}
+
+		System.out.println("Graph args count = " + corcnt);
+		// System.out.println(corcnt);
+		
+		if(resargs[6][0].equals("none"))
+		{
+			
+			//System.out.println("position default value = chr1:1000000  OK");
+			//corcnt = corcnt + 1;
+			//resargs[6][1] = "chr1:1000000";
+			System.out.println("Position error or not defined.\nExit."); 
+			//Exit();
+		}
+
+		if(atleastonetable==0)
+		{
+			System.out.println("\nInput table(s) missing.\nExit.\n");
+			Exit();
+		}
+		if (corcnt < 6) {
+			System.out.println("corcnt = " + corcnt);
+			System.out.println("PosGraph arguments Error. Exit.");
+			Exit();
+		}
+		System.out.println("-----testArgsforPosGraphs method End. " + corcnt);
+		System.out.println();
+		return resargs;
+
+		// System.out.println("testArgsforGraphs method!");
+		//
+		// String graphinfo = "graph 		[main command]\n"+
+		// "[-type]		[pvalue or mutrate]\n"+ "[-tbdir]	[tables path]\n"+
+		// "[-grout]	[graph destination]";
+		//
+		// "mutrate"; return resargs;
+		//
+	}
+
+
+	public static String retrieveNumbOrLetter(String chr)
+	{
+		String res = "", suff="", chrom="";
+		
+		if(chr.length()>=4)
+		{
+			suff=chr.substring(0,3);
+			//System.out.println("&&&&& " + suff);
+			if( (suff.equals("chr")) && (chr.length()<=5) )
+				{
+					res=chr.substring(3,chr.length());
+
+				}
+			else
+				res="chrmformat";				
+		}
+		if(chr.length()<=2)
+//		insert test validity
+			res=chr;
+		System.out.println(res);
+		return res;		
+	}
+
 	// decide Test (START)
 	/**
 	 * 
@@ -3398,21 +4028,28 @@ public class Leucippus
 	 * @throws IOException
 	 * @throws InterruptedException
 	 **/
+
+				//CreateGraphs(pgraph_type, ptable_path, pgraphs_path, rscrp_path,
+				//		bsh_pth, cfpath, grorpvtb, pgraphs_overlap, pcoverages,
+				//		pgermlineAFs);
 	protected static void CreateGraphs(String mutratepvalue,
 			String tables_path, String graphs_path, String rscript_path,
 			String bash_path, String cfpath, String grortb, String overlap,
-			String coverages, String germlineAFs) throws IOException,
+			String coverages, String ranges) throws IOException,
 			InterruptedException {
 	    // CreateGraphs method (START)
 		// grortb : graph or table or both
 		System.out.println("\nStart Create Graph method!\n");
+		
 
+		//if(ranges==null)
+			//ranges="0.05";
 		System.out.println("Graph type : " + mutratepvalue + "\ntables_path : "
 				+ tables_path + "\ngraphs_path : " + graphs_path
 				+ "\nrscript_path : " + rscript_path + "\nbash_path : "
 				+ bash_path + "\ncfpath : " + cfpath + "\nOverlap : " + overlap
 				+ "\ncoverage : " + coverages + "\nrange : "
-				+ (1 - Double.parseDouble(germlineAFs)));
+				+ (Double.parseDouble(ranges)));
 
 //		ClassLoader loader = Leucippus082815.class.getClassLoader();
 		ClassLoader loader = Leucippus.class.getClassLoader();
@@ -3450,7 +4087,7 @@ public class Leucippus
 		
 		String rnrscrpt = rscript_path + " " + rscgrpth + " src=" + tables_path + " " + "dst=" + graphs_path
 				+ " tp=" + mutratepvalue + " gt=" + grortb + " ov="
-				+ overlap + " cov=" + coverages + " gla=" + germlineAFs;
+				+ overlap + " cov=" + coverages + " rng=" + ranges;
 				
 				//+ " -s $src -d $dst -t $tp -h $gt -o $ov -c $cov -l $gla";
 
@@ -3523,7 +4160,8 @@ public class Leucippus
                 new FileOutputStream(shortread1out));
                 bw1 = new BufferedWriter(new OutputStreamWriter(gzipoutr1));
                 
-            } catch (IOException e) {
+            } catch (IOException e) 
+{
                 // TODO Auto-generated catch block
                 e.printStackTrace();
             }
@@ -5121,13 +5759,14 @@ public class Leucippus
 	                                    }
 	                                }
 	                            }
-	            
 	                        }
-	                    } 
+	                    }
+
 	                    catch (IOException e)
 	                    {
 	                        e.printStackTrace();
 	                    }
+
 	                    finally
 	                    {
 	                        System.out.println("Second Finally works!");
@@ -5149,13 +5788,10 @@ public class Leucippus
 	                        catch (IOException e)
 	                        {
 	                            e.printStackTrace();
-	                        }
-	                        
+	                        }       
 	                    }
 	                }
-	                
-	            }
-		        
+	            }	        
 		  }
 		  else if(whileinout.equals("out"))
 		  {
@@ -6103,15 +6739,26 @@ m++;
 
 	public static Vector<String> RetrieveDataFromBam(String bash_path,
 			String samtools_path, String temp_path, String locus,
-			Vector<String> dtflnmspth) throws IOException, InterruptedException {
+			Vector<String> dtflnmspth) throws IOException, InterruptedException 
+	{
+		int wlen=11;
 		temp_path = temp_path + "/";
 		String samtoolsview = "";
+/*
 		if ((samtools_path.equals("none")) || (samtools_path.equals("")))
 			samtoolsview = " samtools view ";
 		else
 			samtoolsview = " " + samtools_path + " view ";
 		//	samtoolsview = " " + samtools_path + "/samtools view ";
-		System.out.println("samtoolsview : " + samtoolsview);
+*/
+//		Retrieve only primary alignment reads 05/23/2016 
+		if ((samtools_path.equals("none")) || (samtools_path.equals("")))
+			samtoolsview = " samtools view -F 0x900 ";
+		else
+			samtoolsview = " " + samtools_path + " view -F 0x900 ";
+//		Retrieve only primary alignment reads  05/23/2016 
+
+		System.out.println("-----samtoolsview : " + samtoolsview);
 		Vector<String> currentsample = new Vector<String>();
 		Vector<String> totaldatacol = new Vector<String>();
 		Vector<String> bmnames = new Vector<String>();
@@ -6131,14 +6778,17 @@ m++;
 														// file
 			{
 
-				pb = new ProcessBuilder("/bin/bash", "-c", samtoolsview
+				System.out.println("'/bin/bash', '-c', " + samtoolsview 
+						+ dtflnmspth.get(i) + " " + locus + " " + "-o "
+						+ temp_path + i + ".txt");
+				pb = new ProcessBuilder("/bin/bash", "-c", samtoolsview 
 						+ dtflnmspth.get(i) + " " + locus + " " + "-o "
 						+ temp_path + i + ".txt");
 				// pb = new ProcessBuilder("/bin/bash", "-c",
 				// " /projects/bsi/bictools/bin/samtools view "
 				// + dtflnmspth.get(i) + " " + locus + " "
 				// + "-o " + results1_path + i + ".txt");
-
+				
 				Process p = pb.start();
 				System.out.println("Process Started ....");
 				p.waitFor();
@@ -6146,8 +6796,8 @@ m++;
 				System.out.println("......Process Ended.");
 				System.out.println("File ready.");
 
-				currentsample = readTheFileIncludeFirstLine(temp_path + i
-						+ ".txt", i + ".txt");
+				currentsample = readTheFileIncludeFirstLineWrdlen(temp_path + i
+						+ ".txt", i + ".txt", wlen);
 				System.out.println("Current Sample size = " + currentsample.size());
 				File f = new File(temp_path + i + ".txt");
 				f.delete();
@@ -6247,7 +6897,8 @@ m++;
 // 			Calculate read actual size
 			for (int p = 0; p < sech.length; p++)
 			{
-				if ( (sech[p] != 'P') && (sech[p] != 'D') && (sech[p] != 'd') && (sech[p] != 'N') )
+				if ( (sech[p] != 'P') && (sech[p] != 'p') && (sech[p] != 'D') && (sech[p] != 'd') && (sech[p] != 'N') )
+				//if ( (sech[p] != 'P') && (sech[p] != 'D') && (sech[p] != 'd') && (sech[p] != 'N') )
 					readactualsize = readactualsize + 1;
 			}
 
@@ -6266,7 +6917,7 @@ m++;
 			for (int j = 0; j < Math.min((double) refsech.length,
 					(double) sech.length); j++) 
 			{
-				if ( (sech[j] != 'P') && (sech[j] != 'D') && (sech[j] != 'd') && (sech[j] != 'N') )
+				if ( (sech[j] != 'P') && (sech[j] != 'p') && (sech[j] != 'D') && (sech[j] != 'd') && (sech[j] != 'N') )
 					if (sech[j] == refsech[j])
 						counter = counter + 1;
 			}
@@ -6387,7 +7038,13 @@ m++;
 //	I will include the first elements and check if now it works
 // 	05/02/2016
 
-
+//	08/01/2016
+//	Position covarage correction, added coverage field for AF indel calculation
+//	AF-Indel = #indel/ind_cov
+// 	number_base_expected = #A + #C + #T + #G + #D (with quality cut-off) 08/01/2016
+//	ind_cov = includes all reads (without quality cutoff) 08/01/2016
+//	Global Table array  
+//	08/01/2016
 	public static void makeTables(String bash_path, String samtools_path,
 			String input, String output, String perc, Vector<String> prms,
 			Vector<String> bms, String tmppath, int dcuti, String pad, String jv) throws IOException,
@@ -6402,8 +7059,8 @@ m++;
 		GZIPOutputStream gzipout = new GZIPOutputStream(new FileOutputStream(
 				outFilename));
 		BufferedWriter bw1 = new BufferedWriter(new OutputStreamWriter(gzipout));
-// **************************************************************************************************************************\\
 
+// **************************************************************************************************************************\\
 
 //	04/26/2016
 
@@ -6411,11 +7068,11 @@ m++;
 	String crrpos ="";
 
 //	04/26/2016
+	int totallines=0, reminedlines_d=0, reminedlines_d_p=0;
 
-
-		Vector<String> pmis = new Vector<String>();
-		for (int i = 0; i < percmis.length; i++)
-			percmis[i] = 0;
+	Vector<String> pmis = new Vector<String>();
+	for (int i = 0; i < percmis.length; i++)
+		percmis[i] = 0;
 //		1. Start
 // 		2. Go throug each site and retrieve the corresponding data from all bam files
 // 		3. Populate the pareticular part of the table array.
@@ -6443,7 +7100,21 @@ m++;
 			if (tblsz < psz)
 				tblsz = psz;
 		}
-		noisetable = new String[tblsz][35];
+
+// 		ind_cov  = includes all reads (without quality cutoff) 08/01/2016
+//		noisetable = new String[tblsz][35];
+		noisetable = new String[tblsz][36];
+//		need for indel coverage
+		totalbasecounts = new int[tblsz][7];
+	// 	totalbasecounts[0..stblsz-1][0] = #As
+	//	totalbasecounts[0..stblsz-1][1] = #Cs
+	//	totalbasecounts[0..stblsz-1][2] = #Ts
+	//	totalbasecounts[0..stblsz-1][3] = #Gs
+	//	totalbasecounts[0..stblsz-1][4] = #Ds
+	//	totalbasecounts[0..stblsz-1][5] = #Ps
+	//	totalbasecounts[0..stblsz-1][6] = #Ns
+// 		ind_cov  = includes all reads (without quality cutoff) 08/01/2016
+
 		int mqi = 30;
 		System.out.println("Maping Quality > " + mqi);
 		Vector<String> reslts = new Vector<String>();
@@ -6453,7 +7124,7 @@ m++;
 		int position = 0;
 		int refchrn = 0, refstart = 0, refend = 0, refsize = 0, refactualsize = 0;
 		String refseq = "", alter = "", altern="", smplnmi = "", smplnmi1 = "";
-		
+
 		String dataline = "", padedseq = "", datseq = "", datqual = "", newline = "";
 		int refid = 0, actualend = 0, posii = 0, posiii=0;
 		String dseq = ""; // holds deletion sequences
@@ -6468,23 +7139,30 @@ m++;
 		String vDeletions = "", vInsertions = "";
 		int d1 = 0, d2 = 0;
 		int x = 0, y = 0;
-
+		int poscov = 0; //poscov = #A+#C+#T+#G+#D
 		String resline = ""; // results line
+		int indcov=0;
 // 		Prepare table Header String 
-		resline = "chromosome" + "\t" + "site" + "\t" + "x" + "\t"
-				+ "y"
-				+ "\t"
-				+ "base_expected"
-				+ "\t"
-				+ "alternative"
-				+ // 5th column has added(alternative
-				"\t" + "number_base_expected" + "\t" + "number_of_As" + "\t"
-				+ "number_of_Cs" + "\t" + "number_of_Ts" + "\t"
-				+ "number_of_Gs" + "\t" + "number_of_Ds" + "\t"
-				+ "number_of_Ps" + "\tD1\tD2\tD3\tD4\tD5\tD6\tD7\tD8\tD9\tD10"
-				+ "\tI1\tI2\tI3\tI4\tI5\tI6\tI7\tI8\tI9\tI10"
-				+ "\tDelInfo\tInsInfo";
-
+		resline = "chromosome\t"	// index 0
+			+ "site\t" 		// index 1
+			+ "x\t" 		// index 2
+			+ "y\t" 		// index 3
+			+ "base_expected\t" 	// index 4
+			+ "alternative\t" 	// index 5
+// number_base_expected = #A + #C + #T + #G + #D (with quality cut-off) 08/01/2016
+			+ "number_base_expected\t" // index 6
+			+ "number_of_As\t" 	// index 7
+			+ "number_of_Cs\t" 	// index 8
+			+ "number_of_Ts\t" 	// index 9
+			+ "number_of_Gs\t" 	// index 10
+			+ "number_of_Ds\t" 	// index 11
+			+ "number_of_Ps\t" 	// index 12
+// ind_cov  = includes all reads (without quality cutoff) 08/01/2016
+			+ "ind_cov\t" 		// index 13
+			+ "D1\tD2\tD3\tD4\tD5\tD6\tD7\tD8\tD9\tD10"//index 14-23
+			+ "\tI1\tI2\tI3\tI4\tI5\tI6\tI7\tI8\tI9\tI10"//index 24-33
+			+ "\tDelInfo\tInsInfo";	// index 34-35
+						// index total 36(0-35)
 		// + "\t" + "N";
 		// System.out.println(resline);
 		reslts.add(resline);
@@ -6510,10 +7188,10 @@ m++;
 		Vector<Integer> insnumv = new Vector<Integer>();
 		Vector<String> insseqv = new Vector<String>();
 		String isinf = "";
-
+		String prmrf="";
 		int dlbfpos = 0, dlnum = 0, inbfpos = 0, innum = 0;
 		// position before deletion insertion and number of insertion or deletion
-
+		String crprimref="", referencebase="";
 		String inseq = "";
 
 		String headers = "";
@@ -6551,7 +7229,7 @@ m++;
 		boolean readpassed=false;
 // inserted on 04/19/2016
 // *********************************************************************************************************************
-
+		String prepadedseq="";
 
 // 05/03/2015 Changed to accept Chromosome X and Y		
 		String refidS="";
@@ -6580,7 +7258,7 @@ m++;
 			striintse="";
 			iinstat="";
 			iinend="";
-			criintstends = initprstrsends.get(h); 	// Global String Vector with initial start and ed interval points
+			criintstends = initprstrsends.get(h); 	// Global String Vector with initial start and end interval points
 								// It is parallel to processed interval vector. The processed interval vector could 
 								// contain less intervals (if not sequence was returned from genome then the interval is discarded). 
 			String[] inseswds = criintstends.split(",");
@@ -6653,6 +7331,7 @@ m++;
 						+ refsize);
 				refactualsize = refend - refstart;
 
+				
 				Left_starti = Integer.parseInt(Left_start);
 				Right_starti = Integer.parseInt(Right_start);
 // 	06/03/2015 Change made in the extension of the border when construct locus(coordinates to query bam files
@@ -6669,7 +7348,9 @@ m++;
 				totaldatacol = RetrieveDataFromBam(bash_path, samtools_path,
 						tmpuiid, locus, bms);
 				System.out.println("Elaborate Data for primer : " + h);
-
+//**********************************************************************************************//
+//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&//
+//**********************************************************************************************//
 				//if (h==2)
 				//writeToFile("/data5/experpath/vasm/vasm/NextGen/niko/pancreatic_capture110615/samples/1329805207/tables/data_Error_Test.tsv", totaldatacol);
 				System.out.println("Current Vector Size : " + totaldatacol.size());
@@ -6679,7 +7360,8 @@ m++;
 					cursmline = totaldatacol.get(i);
 					String[] cslwords = cursmline.split("\t");
 					// System.out.println(i + "<-    ->" + cslwords.length);
-					if (cslwords.length > 9)
+					if (cslwords.length > 11)
+					//if (cslwords.length > 9)	
 					{
 						bflnm = cslwords[0];
 						readname = cslwords[1];
@@ -6708,13 +7390,24 @@ m++;
 //  ***************************************************************************************************************
 //  ***************************************************************************************************************
 */
-
 						MAPQ = cslwords[5];
+						//System.out.println("-> " + cursmline + " <-");
+						//try
+						//{
 						MAPQi = Integer.parseInt(MAPQ);
 						cigar = cslwords[6];
 						flg = cslwords[10];
 						sequence = cslwords[10];
+						//System.out.println("-> " + cursmline + " <-");
 						qual = cslwords[11];
+						//}
+						//catch (NumberFormatException nfe)
+						//{
+							//System.out.println(cursmline);
+						//}
+	
+						
+						
 						// System.out.println("MAPQi : " + MAPQi +
 						// "  Read Length = " + sequence.length() +
 						// "  Qual Length = " + qual.length());
@@ -6738,26 +7431,24 @@ m++;
 					// System.out.println(cslwords[3]);
 				}
 
-
-
-
+				
+				
 				// if(h==2)
 //					writeToFile("/data5/experpath/vasm/vasm/NextGen/niko/pancreatic_capture110615/samples/1329805207/tables/data_Error_seq_Test.tsv", testError);
 //				System.out.println("Remained Vector Size : " + cursmlq.size());
 				
-
-
-
-
-				int totallines = cursmlq.size();
-				//for (int k=0; k<totallines; k++)
-				//cursmlq.set(k, cursmlq.get(k)+ "\t" + totallines);
+				totallines = cursmlq.size();
+				// for (int k=0; k<totallines; k++)
+				// cursmlq.set(k, cursmlq.get(k)+ "\t" + totallines);
 				// System.out.println("JJJJJ----> Size = " + cursmlq.size());
-				writeToFile("/data5/experpath/vasm/vasm/NextGen/niko/TestLeuPrepMethod/test.tsv", cursmlq);
-				//for(int gint=0; gint<50; gint++)
+				// writeToFile("/data5/experpath/vasm/vasm/NextGen/niko/TestLeuPrepMethod/test.tsv", cursmlq);
+				// for(int gint=0; gint<50; gint++)
 				//	System.out.println(vlns.get(gint));
 				//System.exit(0);
+//				cursmlq = PrepareTheDataAndInDls(cursmlq, dcuti, istsends);
 				cursmlq = PrepareTheDataAndInDls(cursmlq);
+				
+//				reminedlines_d = cursmlq.size();
 //				System.out.println("Size after Prepare The data: " + cursmlq.size());
 				// 03/16/2015 cursmlq contains prepared reads with additional
 				// information
@@ -6775,7 +7466,7 @@ m++;
 				// PrimCumula = new Vector<String>();
 			
 				for (int i2 = 0; i2 < cursmlq.size(); i2++) // go through each
-															// read(line)
+				// read(line)
 				{
 					rdnm = "";
 					dataline = cursmlq.get(i2);
@@ -6794,10 +7485,10 @@ m++;
 					vDeletions = dawords[5];
 					vInsertions = dawords[6];
 					cigar = dawords[7];
-					rdnm = dawords[10]; // read name "cnm" if the read is
-										// normal.
+					rdnm = dawords[10]; 	// read name "cnm" if the read is
+							 	// normal.
 					smplnmi = dawords[11];
-//  Limits
+//		Limits
 					if (//(position >= refstart - 100)
 							//&& (position <= refstart + 100)
 							//&& 
@@ -6805,8 +7496,6 @@ m++;
 							&& (position <= refend)) // position matches
 					{
 						// ercnt=ercnt+1;
-						padedseq = padDataSequence(datseq, datqual, position,
-								refstart, refsize, padi);
 						// results.add(padedseq); //
 						// LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
 						// after modifications are done for quality control the
@@ -6815,11 +7504,26 @@ m++;
 						// by tab.
 
 // ********************************************************************************************************************
-// ********************************************************************************************************************
+// *************************************number_base_expected*******************************************************************************
 // ********************************************************************************************************************
 // inserted on 04/19/2016
 // ********************************************************************************************************************
 						// Distance / No Distance Control
+// 09/09/2016 Check for distance cutoff, if yes then implement distance cutoff
+//	if read passes distace cutoff then pad the read acording to -p, next pad the read 
+// according to its alloable distance from reference start and end points					
+// Example:
+//				read		ACTGGGT
+//				ref		CCATACTGGGTCTTA
+				
+//			first   padding
+//				read		PCTGGGP
+//				ref		CCATACTGGGTCTTA
+						
+//			second padding
+//						read	PPPPPCTGGGPPPPP
+//						ref		CCATACTGGGTCTTA
+
 						if (dcuti != -1)
 						{
 							for(int tni=0; tni<istsends.length; tni++)
@@ -6832,10 +7536,12 @@ m++;
 								d2 = Math.abs(actualend - criintedi);
 								// System.out.println("d1 = " + d1 + "  d2 = " +
 								// d2);
-								if ((padedseq.length() > 2)
+								if ((datseq.length() > 2)
 									&& ((d1 < dcuti) && (d2 < dcuti)))
 								{
-								//	newline = refid + "\t" + refstart + "\t"
+									// prepadding and actual padding
+									padedseq = padDataSequence(datseq, datqual, position,
+											refstart, refsize, padi);
 									newline = refidS + "\t" + refstart + "\t"
 										+ actualend + "\t" + padedseq + "\t"
 										+ vDeletions + "\t" + vInsertions
@@ -6846,37 +7552,15 @@ m++;
 								}
 							}
 						}
-// ********************************************************************************************************************
-// ********************************************************************************************************************
-// ********************************************************************************************************************
-// inserted on 04/19/2016
-// ********************************************************************************************************************
-/*
-						// Distance / No Distance Control
-						if (dcuti != -1)
-						{
-							d1 = Math.abs(refstart - position);
-							d2 = Math.abs(actualend - refend);
-							// System.out.println("d1 = " + d1 + "  d2 = " +
-							// d2);
-							if ((padedseq.length() > 2)
-									&& ((d1 < dcuti) && (d2 < dcuti)))
-							{
-							//	newline = refid + "\t" + refstart + "\t"
-								newline = refidS + "\t" + refstart + "\t"
-										+ actualend + "\t" + padedseq + "\t"
-										+ vDeletions + "\t" + vInsertions
-										+ "\t" + cigar + "\t" + rdnm + "\t"
-										+ smplnmi;
-								vlns.add(newline);
-							}
-						}
-*/
-
 						else if (dcuti == -1)
 						{
-							if (padedseq.length() > 2) 
+							
+							if (datseq.length() > 2) 
 							{
+								
+								padedseq = padDataSequence(datseq, datqual, position,
+										refstart, refsize, padi);
+								
 								newline = refidS + "\t" + refstart + "\t"
 									+ actualend + "\t" + padedseq + "\t"
 									+ vDeletions + "\t" + vInsertions
@@ -6889,9 +7573,7 @@ m++;
 						}
 
 					}
-
-					// Distance / No Distance Contro
-
+					// Distance / No Distance Contr
 				}
 
 //				System.out.println("Size after pading the data: " + vlns.size() + "  counter : " + ercnt);
@@ -6911,19 +7593,23 @@ m++;
 
 				// ------------- Add component to the table
 
+				for (int nt = 0; nt < noisetable.length; nt++)
+				// for(int nt1=5; nt1<13; nt1++)
+					for (int nt1 = 0; nt1 < 34; nt1++)
+						noisetable[nt][nt1] = "0";
+					for (int nt = 0; nt < noisetable.length; nt++)
+						// for(int nt1=5; nt1<13; nt1++)
+						for (int nt1 = 34; nt1 < 36; nt1++)
+							noisetable[nt][nt1] = "";
+					for (int nt = 0; nt < totalbasecounts.length; nt++)
+						for (int nt1 = 0; nt1 < 7; nt1++)
+							totalbasecounts[nt][nt1] = 0;
 				if (vlns.size() > 0) 
 				{
 					System.out.println("lines size = " + vlns.size());
 					// prepare the array numbers that hold string numbers with
 					// zeros
-					for (int nt = 0; nt < noisetable.length; nt++)
-						// for(int nt1=5; nt1<13; nt1++)
-						for (int nt1 = 0; nt1 < 33; nt1++)
-							noisetable[nt][nt1] = "0";
-					for (int nt = 0; nt < noisetable.length; nt++)
-						// for(int nt1=5; nt1<13; nt1++)
-						for (int nt1 = 33; nt1 < 35; nt1++)
-							noisetable[nt][nt1] = "";
+					//{
 
 					// Go trough each data line take the read and create a
 					// character arrey that
@@ -7021,41 +7707,42 @@ m++;
 						// System.out.println(carsq[s] + " " + carql[s]);
 
 						// first index 0 0 will hold the position
-						// example noisetable[0][0] : chromosome
-						// example noisetable[0][1] : site
-						// example noisetable[0][2] : x
-						// example noisetable[0][3] : y
-						// example noisetable[0][4] : base expected
-						// example noisetable[0][5] : alternative
-						// examole noisetable[0][6] : #base expected
-						// example noisetable[0][7] : #A
-						// example noisetable[0][8] : #C
-						// example noisetable[0][9] : #T
+						// example noisetable[0][0]  : chromosome
+						// example noisetable[0][1]  : site
+						// example noisetable[0][2]  : x
+						// example noisetable[0][3]  : y
+						// example noisetable[0][4]  : base expected
+						// example noisetable[0][5]  : alternative
+						// examole noisetable[0][6]  : #base expected
+						// example noisetable[0][7]  : #A
+						// example noisetable[0][8]  : #C
+						// example noisetable[0][9]  : #T
 						// example noisetable[0][10] : #G
 						// example noisetable[0][11] : #D
 						// example noisetable[0][12] : #P
-						// example noisetable[0][13] : D1
-						// example noisetable[0][14] : D2
-						// example noisetable[0][15] : D3
-						// example noisetable[0][16] : D4
-						// example noisetable[0][17] : D5
-						// example noisetable[0][18] : D6
-						// example noisetable[0][19] : D7
-						// example noisetable[0][20] : D8
-						// example noisetable[0][21] : D9
-						// example noisetable[0][22] : D10
-						// example noisetable[0][23] : I1
-						// example noisetable[0][24] : I2
-						// example noisetable[0][25] : I3
-						// example noisetable[0][26] : I4
-						// example noisetable[0][27] : I5
-						// example noisetable[0][28] : I6
-						// example noisetable[0][29] : I7
-						// example noisetable[0][30] : I8
-						// example noisetable[0][31] : I9
-						// example noisetable[0][32] : I10
-						// example noisetable[0][33] : DelsInfo
-						// example noisetable[0][34] : InssInfo
+//						// example noisetable[0][13] : #indel-coverage
+						// example noisetable[0][14] : D1
+						// example noisetable[0][15] : D2
+						// example noisetable[0][16] : D3
+						// example noisetable[0][17] : D4
+						// example noisetable[0][18] : D5
+						// example noisetable[0][19] : D6
+						// example noisetable[0][20] : D7
+						// example noisetable[0][21] : D8
+						// example noisetable[0][22] : D9
+						// example noisetable[0][23] : D10
+						// example noisetable[0][24] : I1
+						// example noisetable[0][25] : I2
+						// example noisetable[0][26] : I3
+						// example noisetable[0][27] : I4
+						// example noisetable[0][28] : I5
+						// example noisetable[0][29] : I6
+						// example noisetable[0][30] : I7
+						// example noisetable[0][31] : I8
+						// example noisetable[0][32] : I9
+						// example noisetable[0][33] : I10
+						// example noisetable[0][34] : DelsInfo
+						// example noisetable[0][35] : InssInfo
 
 						x = 1;
 						y = 1;
@@ -7103,6 +7790,7 @@ m++;
 							// y=0;
 							// System.out.println(" i4 : " + i4);
 							expected_base = carrs[i4];
+							
 							curposition = vcposition + i4;
 //	Deletions	Deletions	Deletions	Deletions	Deletions	Deletions	Deletions
 //	Deletions	Deletions	Deletions	Deletions	Deletions	Deletions	Deletions
@@ -7111,14 +7799,14 @@ m++;
 								if (curposition == delposv.get(dcnt))
 								{
 									if (delnumv.get(dcnt) <= 10)
-										noisetable[i4][12 + delnumv.get(dcnt)] = Integer
+										noisetable[i4][13 + delnumv.get(dcnt)] = Integer
 												.toString(Integer
-														.parseInt(noisetable[i4][12 + delnumv
+														.parseInt(noisetable[i4][13 + delnumv
 																.get(dcnt)]) + 1);
 									else
-										noisetable[i4][12 + 10] = Integer
+										noisetable[i4][13 + 10] = Integer
 												.toString(Integer
-														.parseInt(noisetable[i4][12 + 10]) + 1);
+														.parseInt(noisetable[i4][13 + 10]) + 1);
 									// dsinf="D_"+delposv.get(dcnt) + "_" +
 									// delnumv.get(dcnt) + ",";
 									// System.out.println("----> " +
@@ -7134,14 +7822,14 @@ m++;
 									// noisetable[i4][33] = noisetable[i4][33] +
 									// "_" + noisetable[i4][12+10] + dsinf;
 
-									if (delnumv.get(dcnt) <= 10) {
+									if (delnumv.get(dcnt) <= 10){
 										for (int qe = 0; qe < delnumv.get(dcnt); qe++) {
 											if (i4 + qe + 1 < carrs.length)
 												dseq = dseq
 														+ carrs[i4 + qe + 1];
 										}
 										if (dseq.length() > 0)
-											noisetable[i4][33] = noisetable[i4][33]
+											noisetable[i4][34] = noisetable[i4][34]
 													+ dseq + ",";
 										dseq = "";
 									}
@@ -7166,14 +7854,14 @@ m++;
 									// If insertions > 10 the record insertion =
 									// 10 (02/02/2015)
 									if (insnumv.get(icnt) <= 10)
-										noisetable[i4][22 + insnumv.get(icnt)] = Integer
+										noisetable[i4][23 + insnumv.get(icnt)] = Integer
 												.toString(Integer
-														.parseInt(noisetable[i4][22 + insnumv
+														.parseInt(noisetable[i4][23 + insnumv
 																.get(icnt)]) + 1);
 									else
-										noisetable[i4][22 + 10] = Integer
+										noisetable[i4][23 + 10] = Integer
 												.toString(Integer
-														.parseInt(noisetable[i4][22 + 10]) + 1);
+														.parseInt(noisetable[i4][23 + 10]) + 1);
 									// isinf="I_"+insposv.get(icnt) + "_" +
 									// insnumv.get(icnt) + "_" +
 									// insseqv.get(icnt) +",";
@@ -7188,10 +7876,10 @@ m++;
 										// noisetable[i4][34] + "_" +
 										// noisetable[i4][22+insnumv.get(icnt)]
 										// + isinf;
-										noisetable[i4][34] = noisetable[i4][34]
+										noisetable[i4][35] = noisetable[i4][35]
 												+ isinf;
 									} else {
-										noisetable[i4][34] = noisetable[i4][34]
+										noisetable[i4][35] = noisetable[i4][35]
 												+ isinf;
 										// noisetable[i4][34] =
 										// noisetable[i4][34] + "_" +
@@ -7210,21 +7898,51 @@ m++;
 									+ i4); // site
 							noisetable[i4][2] = Integer.toString(x); // x
 							noisetable[i4][3] = Integer.toString(y); // y
-							noisetable[i4][4] = Character
-									.toString(expected_base); // expected
-							noisetable[i4][5] = Character
-									.toString(expected_base); // alternative if
-																// position for
-							for(int mls=0; mls<posv.size(); mls++)			// multiple sites
+							//crprimref = Character
+							//		.toString(expected_base);
+							referencebase = Character
+									.toString(expected_base);
+							// initial set both ref and alt table-elements equal to referenecebase
+							noisetable[i4][4] = referencebase;	// expected
+							noisetable[i4][5] = referencebase;	// alternative if
+
+//							noisetable[i4][4] = crprimref;	// expected
+//							noisetable[i4][5] = crprimref;	// alternative if
+//										  	// position for
+
+							for(int mls=0; mls<posv.size(); mls++)// multiple sites
 							{
 				   				posiii = posv.get(mls);
 								//System.out.println(posiii + " <---->  " + curposition); 
 				   				altern = altv.get(mls);
+				   				prmrf = refv.get(mls);
+				   				
 								if (posiii == curposition) 
 								{
+									
+									//if(prmrf.equals(referencebase))
+									//{
+									//	if(!(altern.equals(referencebase)))
 									noisetable[i4][5] = altern;
-								//	System.out.println("In");
-								//	System.out.println(noisetable[i4][5] + "  --  " + noisetable[i4][4] );
+									//	else if(altern.equals(referencebase))
+									//	{
+									//	    System.out.println("Error site with same ref and alt in :\n" 
+									//		+ CHROM + ":" + curposition + " " + referencebase + " " + altern);
+											//noisetable[i4][5] = referencebase;
+									//	}
+										//else
+										//	noisetable[i4][5] = "E_st_" + altern;
+																																	
+									//}
+									//else if (!(prmrf.equals(referencebase)))
+									//{
+									//   noisetable[i4][5] = 
+									//   retrievemmirroredalt(CHROM, posiii, referencebase, prmrf, altern);
+									//     System.out.println("Warning site mirrored in :\n"
+									//		+ chr + ":" + curposition + " " referencebase + " " altern;
+									//	System.out.println("In");
+									//	System.out.println(noisetable[i4][5] + "  --  " + noisetable[i4][4] );
+									//}
 								}
 							}
 
@@ -7241,70 +7959,157 @@ m++;
 							// taken out of the next loop in order to keep track
 							// of deletions without modifying the expected
 							// number of bases.
-							if (carsq[i4] == 'D') {
-								noisetable[i4][11] = Integer.toString(Integer
-										.parseInt(noisetable[i4][11]) + 1);
-							}
-							if (baseQuality(qsc, carql[i4])
-									&& (!(carsq[i4] == 'P'))
-									&& (!(carsq[i4] == 'D'))
-									&& (!(carsq[i4] == 'N'))
-									&& (!(carsq[i4] == 'd'))) {
-								bqlcount = bqlcount + 1;
-								// noisetable[i4][6]=Integer.toString(vlns.size());
-								noisetable[i4][6] = Integer.toString(Integer
-										.parseInt(noisetable[i4][6]) + 1);
+//  Changes made on 							
+//							if (carsq[i4] == 'D') {
+//								noisetable[i4][11] = Integer.toString(Integer
+//										.parseInt(noisetable[i4][11]) + 1);
+//							}
+					// number of expected bases = #A + #C + #T + #G + #D
+							//if (baseQuality(qsc, carql[i4])
+							//		&& (!(carsq[i4] == 'P'))
+							//		&& (!(carsq[i4] == 'D'))
+							//		&& (!(carsq[i4] == 'N'))
+							//		&& (!(carsq[i4] == 'd')))
+							//	bqlcount = bqlcount + 1;
+							//else if(carsq[i4] == 'D')
+							//	bqlcount = bqlcount + 1;
+								//noisetable[i4][6]=Integer.toString(vlns.size());
+								//noisetable[i4][6] = Integer.toString(Integer
+								//	.parseInt(noisetable[i4][6]) + 1);
+
+			//	We exclude all reads by
+			//		- Mapping quality, and by
+			//		- deltaD
+			//	then we exclude padded bases even if they include indel
+			//
+			//	Now we can calculated coverage (used for indels)
+
+			//	By applying base quality we calculate total expected for SNVs
+
+			//	indels coverage :
+			//      exclude - MAPQ 
+			//		- distancce, 
+			//		- #Ps (don't count them)
+			//		- (no base quality cutoff)
+							if (carsq[i4] == 'A')
+								totalbasecounts[i4][0]=totalbasecounts[i4][0]+1;
+							if (carsq[i4] == 'C')
+								totalbasecounts[i4][1]=totalbasecounts[i4][1]+1;					
+							if (carsq[i4] == 'T')
+								totalbasecounts[i4][2]=totalbasecounts[i4][2]+1;					
+							if (carsq[i4] == 'G')
+								totalbasecounts[i4][3]=totalbasecounts[i4][3]+1;
+							if (carsq[i4] == 'D')
+								totalbasecounts[i4][4]=totalbasecounts[i4][4]+1;
+							if (carsq[i4] == 'P')
+								totalbasecounts[i4][5]=totalbasecounts[i4][5]+1;
+							if (carsq[i4] == 'd'//Ns
+										) // in preparation method, Ns are replaced with ds.
+								totalbasecounts[i4][6]=totalbasecounts[i4][6]+1;
+
+					// Base quality cutoff	for A C T G bases
+							if (baseQuality(qsc, carql[i4]))
+							{
 								if (carsq[i4] == 'A') {
 									noisetable[i4][7] = Integer
 											.toString(Integer
-													.parseInt(noisetable[i4][7]) + 1);
+													.parseInt(noisetable[i4][7])+1);
 								}
 
 								if (carsq[i4] == 'C') {
 									noisetable[i4][8] = Integer
 											.toString(Integer
-													.parseInt(noisetable[i4][8]) + 1);
+													.parseInt(noisetable[i4][8])+1);
 								}
 
 								if (carsq[i4] == 'T') {
 									noisetable[i4][9] = Integer
 											.toString(Integer
-													.parseInt(noisetable[i4][9]) + 1);
+													.parseInt(noisetable[i4][9])+1);
 								}
 
 								if (carsq[i4] == 'G') {
 									noisetable[i4][10] = Integer
 											.toString(Integer
-													.parseInt(noisetable[i4][10]) + 1);
+													.parseInt(noisetable[i4][10])+1);
 								}
-								if (carsq[i4] == 'D') {
-									noisetable[i4][11] = Integer
-											.toString(Integer
-													.parseInt(noisetable[i4][11]) + 1);
-								}
-								if (carsq[i4] == 'P') {
-									noisetable[i4][12] = Integer
-											.toString(Integer
-													.parseInt(noisetable[i4][12]) + 1);
-								}
+							}
+
+							if (carsq[i4] == 'D') {
+								noisetable[i4][11] = Integer
+										.toString(Integer
+												.parseInt(noisetable[i4][11])+1);
+							}
+
+							if (carsq[i4] == 'P') {
+								noisetable[i4][12] = Integer
+									.toString(Integer
+											.parseInt(noisetable[i4][12])+1);
 							}
 						}
 					}
+
 					// vcposition = Integer.parseInt(vcwords[5]);
 					// vcrefid = Integer.parseInt(vcwords[4]);
 					// vcseq =
 					for (int i5 = 0; i5 < carrs.length; i5++) 
 					{
-						resline = noisetable[i5][0] + "\t" + noisetable[i5][1]
-								+ "\t" + noisetable[i5][2] + "\t"
-								+ noisetable[i5][3] + "\t" + noisetable[i5][4]
-								+ "\t" + noisetable[i5][5] + "\t"
-								+ noisetable[i5][6] + "\t" + noisetable[i5][7]
-								+ "\t" + noisetable[i5][8] + "\t"
-								+ noisetable[i5][9] + "\t" + noisetable[i5][10]
-								+ "\t" + noisetable[i5][11] + "\t"
+						
+						// calculate position coverage START
+						// cov = #A + #C + #T + #G + #D  
+						// example noisetable[0][7]  : #A
+						// example noisetable[0][8]  : #C
+						// example noisetable[0][9]  : #T
+						// example noisetable[0][10] : #G
+						// example noisetable[0][11] : #D
+						// totalbasecount[i4][0]
+
+						poscov = 
+								Integer.parseInt(noisetable[i5][7] )  + //  #A
+								Integer.parseInt(noisetable[i5][8] )  + //  #C
+								Integer.parseInt(noisetable[i5][9] )  + //  #T
+								Integer.parseInt(noisetable[i5][10])  + //  #G
+								Integer.parseInt(noisetable[i5][11]);// //  #D
+						noisetable[i5][6] = Integer.toString(poscov);
+
+						// calculate indel coverage START
+						// indelcov = without quality cutoff : #A + #C + #T + #G + #D + #Ps  
+//						// indcov = poscov + Integer.parseInt(noisetable[i5][12]);
+
+						indcov = 
+						totalbasecounts[i5][0] +
+						totalbasecounts[i5][1] +
+						totalbasecounts[i5][2] +
+						totalbasecounts[i5][3] +
+						totalbasecounts[i5][4] +
+						totalbasecounts[i5][5] +
+						totalbasecounts[i5][6];
+
+						noisetable[i5][13] = Integer.toString(indcov);
+
+						// calculate position coverage END
+						// keep initial total read coverage 
+						// calculation indel_AF = #ndel/totalcov
+						// reminedlines_d_p = reminedlines_d - Integer.parseInt(noisetable[i5][12]);
+						// noisetable[i5][13] = Integer.toString(reminedlines_d_p);
+
+						resline = 
+								  noisetable[i5][0]  + "\t"
+								+ noisetable[i5][1]  + "\t"
+								+ noisetable[i5][2]  + "\t"
+								+ noisetable[i5][3]  + "\t"
+								+ noisetable[i5][4]  + "\t"
+								+ noisetable[i5][5]  + "\t"
+								+ noisetable[i5][6]  + "\t"
+								+ noisetable[i5][7]  + "\t"
+								+ noisetable[i5][8]  + "\t"
+								+ noisetable[i5][9]  + "\t"
+								+ noisetable[i5][10] + "\t"
+								+ noisetable[i5][11] + "\t"
 								+ noisetable[i5][12] + "\t"
+
 								+ noisetable[i5][13] + "\t"
+
 								+ noisetable[i5][14] + "\t"
 								+ noisetable[i5][15] + "\t"
 								+ noisetable[i5][16] + "\t"
@@ -7325,31 +8130,26 @@ m++;
 								+ noisetable[i5][31] + "\t"
 								+ noisetable[i5][32] + "\t"
 								+ noisetable[i5][33] + "\t"
-								+ noisetable[i5][34];
-
-						// + "\t" + noisetable[i5][13];
+								+ noisetable[i5][34] + "\t"
+								+ noisetable[i5][35];
 						reslts.add(resline);
 					}
 				}
 
-
 				else if (vlns.size()==0) 
 				{
-
 					// zeros
 					for (int nt = 0; nt < noisetable.length; nt++)
 						// for(int nt1=5; nt1<13; nt1++)
-						for (int nt1 = 0; nt1 < 33; nt1++)
+						for (int nt1 = 0; nt1 < 34; nt1++)
 							noisetable[nt][nt1] = "0";
 					for (int nt = 0; nt < noisetable.length; nt++)
 						// for(int nt1=5; nt1<13; nt1++)
-						for (int nt1 = 33; nt1 < 35; nt1++)
-
+						for (int nt1 = 34; nt1 < 36; nt1++)
 					x=0;
 					y=carrs.length;
 					for (int i5 = 0; i5 < carrs.length; i5++) 
 					{
-						
 						expected_base = carrs[i5];
 						x = i5 + 1;
 						y = carrs.length - x + 1;
@@ -7358,25 +8158,88 @@ m++;
 						noisetable[i5][1] = Integer.toString(curposition); // site
 						noisetable[i5][2] = Integer.toString(x); // x
 						noisetable[i5][3] = Integer.toString(y); // y
-						noisetable[i5][4] = Character
-								.toString(expected_base); // expected
-						noisetable[i5][5] = Character
-								.toString(expected_base); // alternative if
-												// position for
-						for(int mls=0; mls<posv.size(); mls++)			// multiple sites
+						crprimref = Character
+								.toString(expected_base);
+						noisetable[i5][4] = crprimref;	// expected
+						noisetable[i5][5] = crprimref;	// alternative if
+										// position for
+						for(int mls=0; mls<posv.size(); mls++)// multiple sites
 						{
 			   				posiii = posv.get(mls);
 							//System.out.println(posiii + " <---->  " + curposition); 
 			   				altern = altv.get(mls);
+			   				prmrf = refv.get(mls);
 							if (posiii == curposition) 
-							{
-								noisetable[i5][5] = altern;
-							//	System.out.println("In");
-							//	System.out.println(noisetable[i4][5] + "  --  " + noisetable[i4][4] );
+							{		
+							//	if(prmrf.equals(referencebase))
+							//	{
+							//		if(!(altern.equals(referencebase)))
+							noisetable[i5][5] = altern;
+							//		else if(altern.equals(referencebase))
+							//		{
+							//		    System.out.println("Error site with same ref and alt in :\n" 
+							//			+ CHROM + ":" + curposition + " " + referencebase + " " + altern);
+							//			//noisetable[i4][5] = referencebase;
+							//		}
+									//else
+							//	//	noisetable[i4][5] = "E_st_" + altern;
+							//	}
+							//	else if (!(prmrf.equals(referencebase)))
+							//	{
+							//	   noisetable[i5][5] = 
+							//	   retrievemmirroredalt(CHROM, posiii, referencebase, prmrf, altern);
+								//	System.out.println("Warning site mirrored in :\n"
+								//		+ chr + ":" + curposition + " " referencebase + " " altern;
+								//	System.out.println("In");
+								//	System.out.println(noisetable[i4][5] + "  --  " + noisetable[i4][4] );
+							//	}
 							}
 						}
-						noisetable[i5][33]=null;
-						noisetable[i5][34]=null;			
+						//noisetable[i5][13] = Integer.toString(totallines);
+						noisetable[i5][13] = "0"; 
+						noisetable[i5][34]=null;
+						noisetable[i5][35]=null;
+
+						resline = 	  noisetable[i5][0]  + "\t"
+								+ noisetable[i5][1]  + "\t"
+								+ noisetable[i5][2]  + "\t"
+								+ noisetable[i5][3]  + "\t"
+								+ noisetable[i5][4]  + "\t"
+								+ noisetable[i5][5]  + "\t"
+								+ noisetable[i5][6]  + "\t"
+								+ noisetable[i5][7]  + "\t"
+								+ noisetable[i5][8]  + "\t"
+								+ noisetable[i5][9]  + "\t"
+								+ noisetable[i5][10] + "\t"
+								+ noisetable[i5][11] + "\t"
+								+ noisetable[i5][12] + "\t"
+
+								+ noisetable[i5][13] + "\t" // = number of reads after MAPQ and base quality cutoff = 0
+
+								+ noisetable[i5][14] + "\t"
+								+ noisetable[i5][15] + "\t"
+								+ noisetable[i5][16] + "\t"
+								+ noisetable[i5][17] + "\t"
+								+ noisetable[i5][18] + "\t"
+								+ noisetable[i5][19] + "\t"
+								+ noisetable[i5][20] + "\t"
+								+ noisetable[i5][21] + "\t"
+								+ noisetable[i5][22] + "\t"
+								+ noisetable[i5][23] + "\t"
+								+ noisetable[i5][24] + "\t"
+								+ noisetable[i5][25] + "\t"
+								+ noisetable[i5][26] + "\t"
+								+ noisetable[i5][27] + "\t"
+								+ noisetable[i5][28] + "\t"
+								+ noisetable[i5][29] + "\t"
+								+ noisetable[i5][30] + "\t"
+								+ noisetable[i5][31] + "\t"
+								+ noisetable[i5][32] + "\t"
+								+ noisetable[i5][33] + "\t"
+								+ noisetable[i5][34] + "\t"
+								+ noisetable[i5][35];
+
+/*
 						resline = noisetable[i5][0] + "\t" + noisetable[i5][1]
 								+ "\t" + noisetable[i5][2] + "\t"
 								+ noisetable[i5][3] + "\t" + noisetable[i5][4]
@@ -7408,6 +8271,7 @@ m++;
 								+ noisetable[i5][32] + "\t"
 								+ noisetable[i5][33] + "\t"
 								+ noisetable[i5][34];
+*/
 						reslts.add(resline);
 					}
 				}
@@ -7466,6 +8330,153 @@ m++;
 		 */
 	}
 
+	//retrievemmirroredalt(CHROM, posiii, referencebase, prmrf, altern);
+	// Genome    Reference      base = ref
+	// Primer(site) Rference    base = prmref
+	// Primer(site) Alternative base = altern
+	// Chromosome 			 = chr
+	// Site 			 = posi
+	public static String retrievemmirroredalt(String chr, int posi, String ref, String prmref, String alter)
+	{
+		String res = "", finres="", cur ="" ;
+		boolean is_mirrored = false;
+		if( (ref.equals("A")) && (prmref.equals("T")) ||
+			(ref.equals("C")) && (prmref.equals("G")) ||
+			(ref.equals("T")) && (prmref.equals("A")) ||
+			(ref.equals("G")) && (prmref.equals("C")) )
+			is_mirrored = true;
+			
+		if (is_mirrored == true)
+		{	
+			for(int b=0; b<alter.length(); b++)
+			{
+				
+				cur = Character.toString(alter.charAt(b));
+				if (cur.equals("A"))
+					if(!(ref.equals("T")))
+						res=res + "T";
+				if (cur.equals("C"))
+					if(!(ref.equals("G")))
+						res=res + "G";
+				if (cur.equals("T"))
+					if(!(ref.equals("A")))
+						res=res + "A";
+				if (cur.equals("G"))
+					if(!(ref.equals("C")))
+					res=res + "C";
+			}
+			if(res.length()==1)
+				finres=res;
+			else if(res.length()>1) // order them A > C > T > G
+			{
+				for(int k=0; k<res.length(); k++)
+				{
+					cur=res.substring(k,k+1);
+					if(cur.equals("A"))
+						finres="A";
+				}
+
+				for(int k=0; k<res.length(); k++)
+				{
+					cur=res.substring(k,k+1);
+					if(cur.equals("C"))
+						finres=finres +"C";
+				}
+				for(int k=0; k<res.length(); k++)
+				{
+					cur=res.substring(k,k+1);
+					if(cur.equals("T"))
+						finres=finres +"T";
+				}
+				for(int k=0; k<res.length(); k++)
+				{
+					cur=res.substring(k,k+1);
+					if(cur.equals("G"))
+						finres=finres +"G";
+				}
+			}
+
+			else if(res.length()<1)
+			{
+				// finres="E_am_" + alter;
+				finres = ref;
+			}
+
+			System.out.println("Warning : mirrored site : " + 
+				chr + ":" + posi + " ref: " + prmref + 
+				" alt: " + alter + "\nreplaced by : " + 
+				chr + ":" + posi + " ref: " + 
+				ref + " alt: " + alter );
+		}
+		if (is_mirrored == false)
+		{
+			System.out.println("Warning site error : " + chr + ":" + posi + " ref: " + prmref + " alt: " + alter );
+			// finres="E_rm_" + prmref + "_" + alter;
+		}
+		return finres;
+	}
+
+	
+	//retrievemmirroredalt(prmrf, noisetable[i4][4], altern);
+	public static String retrievemmirroredalti(String prmref, String ref, String alter)
+	{
+		String res = "", finres="", cur ="" ;
+		boolean is_mirrored = false;
+		if( (ref.equals("A")) && (prmref.equals("T")) ||
+			(ref.equals("C")) && (prmref.equals("G")) ||
+			(ref.equals("T")) && (prmref.equals("A")) ||
+			(ref.equals("G")) && (prmref.equals("C")) )
+			is_mirrored = true;
+			
+		if (is_mirrored == true)
+		{	
+			for(int b=0; b<alter.length(); b++)
+			{
+				
+				cur = Character.toString(alter.charAt(b));
+				if (cur.equals("A"))
+					res=res + "T";
+				if (cur.equals("C"))
+					res=res + "G";
+				if (cur.equals("T"))
+					res=res + "A";
+				if (cur.equals("G"))
+					res=res + "C";
+		}	}
+		
+		if (is_mirrored == false)
+			res="E_" + alter;
+		if(res.length()>1)
+		{
+			for(int k=0; k<res.length(); k++)
+			{
+				cur=res.substring(k,k+1);
+				if(cur.equals("A"))
+						finres="A";
+			}	
+			for(int k=0; k<res.length(); k++)
+			{
+				cur=res.substring(k,k+1);
+				if(cur.equals("C"))
+						finres=finres +"C";
+			}
+			for(int k=0; k<res.length(); k++)
+			{
+				cur=res.substring(k,k+1);
+				if(cur.equals("T"))
+						finres=finres +"T";
+			}
+			for(int k=0; k<res.length(); k++)
+			{
+				cur=res.substring(k,k+1);
+				if(cur.equals("G"))
+						finres=finres +"G";
+			}
+			
+			
+		}
+		return res;
+	}
 	/**
 	 * Method to be documented
 	 * 
@@ -7475,6 +8486,13 @@ m++;
 	 * @param refstart
 	 * @param refsize
 	 * @return
+	 * Tasks : 
+	 * 1. Pad read first(P)
+	 * 2. Check read length and start and end distanses from refference start and end
+	 * 3. The do aligning-helpping-padding(p)
+	 * 
+	 * 09_09_2016 Ps replaced by ps in aligning-helpping-padding 
+	 * Reason : The addionnal ps will not count in Indel coverage
 	 */
 	public static String padDataSequence(String vcseq, String datql,
 			int vcposition, int refstart, int refsize, int padi) {
@@ -7506,8 +8524,8 @@ m++;
 			if (size < refsize) {
 				diff = refsize - size;
 				for (int i = 0; i < diff; i++) {
-					resultdtseq = resultdtseq + "P";
-					resultedqual = resultedqual + "P";
+					resultdtseq = resultdtseq + "p";
+					resultedqual = resultedqual + "p";
 				}
 			}
 			if (size > refsize) {
@@ -7516,6 +8534,8 @@ m++;
 			}
 		}
 
+		
+		
 		if (vcposition > refstart) {
 			// the data starting position is after the reference position : add
 			// Ps in front
@@ -7523,21 +8543,24 @@ m++;
 			// System.out.println("fragment  position = " + vcposition);
 			// System.out.println("reference position = " + refstart);
 			// System.out.println("difference = " + diff);
+			// add ps in front
 			for (int i = 0; i < diff; i++) {
-				resultdtseq = "P" + resultdtseq;
-				resultedqual = "P" + resultedqual;
+				resultdtseq = "p" + resultdtseq;
+				resultedqual = "p" + resultedqual;
 			}
 			size = resultdtseq.length();
-
+			
 			if (size < refsize) {
 				diff = refsize - size;
+				// add ps to the end
 				for (int i = 0; i < diff; i++) {
-					resultdtseq = resultdtseq + "P";
-					resultedqual = resultedqual + "P";
+					resultdtseq = resultdtseq + "p";
+					resultedqual = resultedqual + "p";
 				}
 			}
 
 			if (size > refsize) {
+				// cut at the end
 				resultdtseq = resultdtseq.substring(0, refsize);
 				resultedqual = resultedqual.substring(0, refsize);
 			}
@@ -7556,8 +8579,8 @@ m++;
 			if (resultdtseq.length() < refsize) {
 				diff = refsize - resultdtseq.length();
 				for (int i = 0; i < diff; i++) {
-					resultdtseq = resultdtseq + "P";
-					resultedqual = resultedqual + "P";
+					resultdtseq = resultdtseq + "p";
+					resultedqual = resultedqual + "p";
 				}
 			}
 			if (resultdtseq.length() > refsize) {
@@ -7565,9 +8588,11 @@ m++;
 				resultedqual = resultedqual.substring(0, refsize);
 			}
 		}
+		
 		reseqqual = resultdtseq + "\t" + resultedqual;
 
 		return reseqqual;
+		
 	}
 
 	public static Vector<String> retrieveBamflNmspths(String dt_pth,
@@ -7674,15 +8699,16 @@ m++;
 				posi = posi + " ";
 				// posi=posi+crps;
 				// System.out.println(clv.get(i) + " --:-- " + cp);
-				if (cp + cnv.get(i) < rch.length + 1) {
-					for (j = cp; j < cp + cnv.get(i); j++) {
+				if (cp + cnv.get(i) < rch.length + 1) 
+				{
+					for (j = cp; j < cp + cnv.get(i); j++)
+					{
 						posi = posi + "," + crps;
 						finalread = finalread + rch[j];
 						//System.out.println("Here 1");
 						//System.out.println(cigar);
 						//System.out.println(read);
 						//System.out.println(qual);
-
 						finalquality = finalquality + qch[j];
 						//System.out.println("Here 2");
 						crps = crps + 1;
@@ -7857,7 +8883,6 @@ m++;
 	 * noisetab command will be performed Pay attention to the commented
 	 * examples in the method.
 	 * 
-	 * 
 	 * @param res1data
 	 * @return
 	 **/
@@ -8010,7 +9035,7 @@ m++;
 
 				// Example 2 Cigar = 20M1D1I39M, initial length = 60, final
 				// length = 60
-				// (one insertion was removed and one D have been added)
+				// (one insertion was removed and one D has been added)
 				// (final cigar = 20M1D39M=60M since information about Ds
 				// included in the read now)
 
@@ -8200,7 +9225,15 @@ m++;
 		return secres;
 	}
 
-
+// parameters :
+//				data vector, 
+//				distance cutoff
+//				curent initial interval start and end points
+// 	reconstruct workable cigar insert deletions calculate workable read length(handle
+//  Ss and Hs, ignore insertions, calculate read-start and read-end	implement distance cutoff 
+//  then calculate retrieve indels.
+// 	not yet implemented (padding cutoff); 	
+	
 	public static Vector<String> PrepareTheDataAndInDls(Vector<String> res1data) {
 		System.out.println("	Start of 'PrepareTheData' Method!");
 		System.out.println("		Processing Start..................");
@@ -8608,7 +9641,487 @@ m++;
 		System.out.println("	End of 'PrepareTheData' Method!");
 		return secres;
 	}
+	
+	
+	
+	
+	
+/*	
+// With distance cutoff
+	
+	public static Vector<String> PrepareTheDataAndInDls(Vector<String> res1data, int dstcf, int[][] istsends) {
+		System.out.println("	Start of 'PrepareTheData' Method!");
+		System.out.println("		Processing Start..................");
+		System.out.println("    Size = " + res1data.size());
+		int regectread = 0;
+		boolean passdistancecutoff=false;
+		boolean passpaddingcutoff=false;
+		double d1=0.0, d2=0.0;
+		int criinsti=0, criintedi=0;
+		//
+		// String example_line = + origflnm + "\t" // 0 + site +"\t" // 1 +
+		// CHROM + "\t" // 2 + REF + "\t" // 3 + ALT + "\t" // 4 + chromosome +
+		// "\t" // 5 + position + "\t" // 6 + MAPQ + "\t" // 7 + cigar + "\t" //
+		// 8 + sequence + "\t" // 9 + qual + "\t" // 10 + strand + "\t" // 11 +
+		// readname + "\t" // 12 + numbelines; // 13
+		//
+		String line = "", cigar = "", fragment = "", 
+				site_ref = "", filenm = "", quality = "", 
+				strand = "", readname = "", readnmreturn = "", 
+				numberlines = "", delenstr="", prvcig = "", 
+				rd = "", rd1 = "", gic = "", gic1 = "", chromS = "",
+				rescireadqual = "", curcig = "",
+				auxstr = "", ciginfo = "", fifrag = "", fiqual = "",
+				insstr = "", insbs = "";
+		
+		int chrom = 0, site = 0, position = 0, MAPQ = 0, 
+				expval = 0, frsize = 0, asize = 0, DNs=0, currpos=0,
+				crreadstart=0, crreadend=0;
+		
+		Vector<Integer> cnv = new Vector<Integer>(); // populate 'C'igar// 'N'umbers 'V'ector// with numbers
+		Vector<String>  clv = new Vector<String>();  // populate 'C'igar 'L'etter// 'V'ector with letters
+		Vector<String> ffrag = new Vector<String>(); // finaltransformed// fragment
+		Vector<String> fqual = new Vector<String>(); // final quality
+		Vector<Integer> delpoints = new Vector<Integer>();
+		Vector<Integer> delsenspoints = new Vector<Integer>();
+		Vector<String> delsensletters = new Vector<String>();
+		Vector<Integer> inspoints = new Vector<Integer>();
+		Vector<String> secres = new Vector<String>();
+		Vector<String> delsEns = new Vector<String>();
+		Vector<String> dels = new Vector<String>();
+		Vector<String> inss = new Vector<String>();
+// Error number format exception:
+// 09/07/2016	
+// Problem cancatenating position and quality strings
+// Cause unknown. Maybe java version program needs more investigation 		
+		String positions="", MAPQs="", sites="";
+		boolean parsingpass = true;
+		for (int i = 0; i < res1data.size(); i++)
+		{
+			regectread = 0;
+			parsingpass = true;
+			line = res1data.get(i);
+			// System.out.println("\n line = " + line);
+			String mwords[] = line.split("\t");
+			// for(int y=0; y<mwords.length; y++)
+			for (int y = 0; y < 10; y++) {
+				mwords[y] = mwords[y].replace("\"", "");
+			}
 
+			//
+			// + origflnm + "\t" // 0 + site +"\t" // 1 + CHROM + "\t" // 2 +
+			// REF + "\t" // 3 + ALT + "\t" // 4 + chromosome + "\t" // 5 +
+			// position + "\t" // 6 + MAPQ + "\t" // 7 + cigar + "\t" // 8 +
+			// sequence + "\t" // 9 + qual + "\t" // 10 + strand + "\t" // 11 +
+			// readname + "\t" // 12 + numbelines; // 13
+			//
+			
+			sites=mwords[1];
+			positions=mwords[6];
+			MAPQs=mwords[7];
+			if( (isPosUnsignInteger(sites)==false) ||
+				(isPosUnsignInteger(positions)==false) ||
+				(isPosUnsignInteger(MAPQs)==false) )
+				parsingpass = false;
+			if(parsingpass==true)
+			{
+				site = Integer.parseInt(sites);
+				MAPQ = Integer.parseInt(MAPQs);
+				position = Integer.parseInt(positions);
+				filenm = mwords[0]; // filename
+				readname = mwords[12];
+				site_ref = mwords[2];
+				chromS = mwords[5];			
+				cigar = mwords[8];
+				gic = mwords[8];
+				rd = mwords[9];
+				quality = mwords[10];
+				
+				for(int yo=0;yo<cigar.length(); yo++)
+				if(cigar.charAt(yo)=='N')
+					System.out.println("Found N in cigar : " + cigar);
+//   		Error in cigar			
+				if ((cigar.length() <= 1) || 
+						(quality.length() <= 1) || 
+						(!(rd.length()==quality.length())) )
+					regectread = 1;
+//				Implement distance cutoff
+// 				Implement padding  cutoff		
+				if (regectread == 0) 
+				{
+					prvcig = cigar;
+					fragment = mwords[9];
+					fragment = fragment.replace("\"", "");
+
+				frsize = fragment.length();
+				quality = mwords[10];
+				// base quality field contains characters that are quality
+				// indicators and always are important (thus this field must not
+				// be cleaned
+				// quality = quality.replace("\"", "");
+				strand = mwords[11];
+				// System.out.println("File Name : " + filenm +
+				// "\nChromosome : chr" + chrom + "\nPosition : " + position +
+				// "\nSeqSize : " + frsize + "\nSite : " + site +
+				// "\nSite Reference : " + site_ref + "\nExpected Value : " +
+				// expval + "\nnCigar : " + nCigar + "\nCigar : " + cigar);
+				// System.out.println(cigar);
+				// for(int w=0; w<mwords.length; w++)
+				// System.out.println(mwords[w]);
+				// System.out.println(cigar + "  " + fragment + " " + quality);
+				rescireadqual = HandleCigSs(cigar, fragment, quality);
+				String[] cfq = rescireadqual.split("\n");
+				curcig = cfq[0];
+				cigar = cfq[0];
+				gic1 = cfq[0];
+				fragment = cfq[1];
+				rd1 = cfq[1];
+				quality = cfq[2];
+				ciginfo = retrieveCigarInfo(cigar); // retrieve a string that
+													// contains digestible cigar
+													// info
+				// example : "123 M 1 I 25 M 2 D 2 M" (elements separated by
+				// space; odds are letters; evens are numbers.)
+				String[] wcs = ciginfo.split(" "); // retrieve words with
+				
+				// letters and numbers
+				dels = new Vector<String>();								// separately
+				delsenspoints = new Vector<Integer>();
+				// System.out.println(ciginfo);
+				// System.out.println("Chromosome : chr" + chrom);
+				cnv = new Vector<Integer>(); // # matches or # mismatches or #
+				// Insertions or # deletions all
+				// together numeric vector
+				clv = new Vector<String>(); // the corresponding to
+				// previous(numeric) letter vector
+				// separate and put the elements of cigar space separated string
+				// into the vector
+				for (int i1 = 0; i1 < wcs.length; i1++)
+				{
+					if ((i1 % 2 == 0) && (!wcs[i1].equals("")))
+					{
+						// System.out.println(wcs[i1]);
+						cnv.add(Integer.parseInt(wcs[i1].replace("\"", "")));
+					}
+					else
+					{
+						if (!wcs[i1].equals(""))
+							clv.add(wcs[i1]);
+					}
+				}
+
+				// find the actual size
+				asize = 0;
+				// System.out.println(cnv.size());
+				// for loop that calculates the length of the read that
+				// finally will be created by adding the deletion points too
+				// This length might be greater than the initial length if
+				// insertion weren't found but deletions exist.
+				// Example 1 Cigar = 20M2D39M, initial length = 59, final
+				// length=61 (final cigar = 20M2M39M=61M)
+				// Example 2 Cigar = 20M1D1I39M, initial length = 60, final
+				// length = 60
+				// (one insertion was removed and one D have been added)
+				// (final cigar = 20M1D39M=60M since information about Ds
+				// included in the read now)
+
+//				Here the Ns must be added
+				for (int i1 = 0; i1 < cnv.size(); i1++) 
+				{
+					if ((clv.get(i1).equals("M")) 
+					|| (clv.get(i1).equals("D")) 
+					|| (clv.get(i1).equals("N")))
+						asize = asize + cnv.get(i1);
+				}
+// 8/8/2016				
+//	implement distance cutoff (distance and padding cutoffs before retrieving indels)
+				passdistancecutoff=true;
+				if (dstcf != -1)
+				{
+					crreadstart = position;
+					crreadend = position + asize-1;
+					for(int tni=0; tni<istsends.length; tni++)
+					{
+						criinsti=0;
+						criintedi=0;
+						criinsti=istsends[tni][0];
+						criintedi=istsends[tni][1];
+						d1 = Math.abs(criinsti - crreadstart);
+						d2 = Math.abs(criintedi - crreadend);
+						// System.out.println("d1 = " + d1 + "  d2 = " +
+						// d2);
+						if((d1 < dstcf) && (d2 < dstcf))
+							passdistancecutoff=false;
+					}
+				}
+				
+//					if ((padedseq.length() > 2)
+//							&& ((d1 < dcuti) && (d2 < dcuti)))
+//						{
+//						//	newline = refid + "\t" + refstart + "\t"
+//								newline = refidS + "\t" + refstart + "\t"
+//									+ actualend + "\t" + padedseq + "\t"
+//									+ vDeletions + "\t" + vInsertions
+//									+ "\t" + cigar + "\t" + rdnm + "\t"
+//									+ smplnmi;
+//								vlns.add(newline);
+//								tni=istsends.length;
+//							}
+//						}
+//					}
+		
+// 8/8/2016				
+//	implement distance cutoff
+				
+				//String[] fragpl = fragment.split(""); // fragment string character array
+				//String[] qualpl = quality.split(""); // quality string character array
+			if(passdistancecutoff)
+			{
+					char[] fragcr = fragment.toCharArray();				
+					char[] qualcr = quality.toCharArray();
+					String[] fragpl = new String[fragcr.length];
+					String[] qualpl = new String[qualcr.length];
+
+					for(int le=0; le<fragcr.length; le++)
+					fragpl[le]=Character.toString(fragcr[le]);
+					for(int le=0; le<qualcr.length; le++)
+					qualpl[le]=Character.toString(qualcr[le]);
+
+					ffrag = new Vector<String>(); // final transformed fragment
+					ffrag.addAll(Arrays.asList(fragpl));
+					//ffrag.remove(0);
+					fqual = new Vector<String>(); // final transformed fragment
+					fqual.addAll(Arrays.asList(qualpl));
+					//fqual.remove(0);
+
+					String delsstr = "", ensstr="", inssstr = "";
+					delpoints = new Vector<Integer>();
+				
+					DNs = 0; // Ds counter
+					inspoints = new Vector<Integer>();
+					int fsize = 0; // fragment size (number of total bases Ms and Ds
+					int dnis = 0;
+					String delstr = "";
+					String enstr = "";
+					//enspoints = new Vector<Integer>();
+				
+					inss = new Vector<String>();
+					insstr = ""; insbs = "";
+					currpos = 0; // Variable used to deal with the actual read
+									// string char array]
+									// it is used to target the info about
+									// insertions and retrieve the involved
+									// bases
+									// it is incremented only with presence of
+									// base. Deletion cannot increment that
+									// variable.
+
+					for (int i2 = 0; i2 < clv.size(); i2++)
+					{
+						if (clv.get(i2).equals("M"))
+						{
+							fsize = fsize + cnv.get(i2);
+							currpos = currpos + cnv.get(i2); // this is very useful
+															// for Insertions
+							// currpos is an indicator of before insertion position
+							// that depends on the
+							// initial size of the read. the final (and mapping
+							// position are retrieved form 'fize' variable
+						}
+						if ( (clv.get(i2).equals("D")) ||  (clv.get(i2).equals("N")) )// if cigar indicates D then
+													// retrieve its number and
+							// go through a loop in it
+						{
+
+							if((clv.get(i2).equals("D")) || clv.get(i2).equals("N"))
+							{
+								delenstr = (position + fsize - 1) + "_" + cnv.get(i2);
+								if(clv.get(i2).equals("D"))
+								dels.add(delenstr);
+								delsEns.add(delenstr);
+							}
+							for (dnis = 1; dnis <= cnv.get(i2); dnis++) 
+							{
+								//delpoints.add(fsize + dnis - 1 + Ds);
+								delsenspoints.add(fsize + dnis - 1 + DNs);
+								if((clv.get(i2).equals("D")))
+								{
+									//System.out.println("DDD " + (fsize + dnis - 1 + DNs));
+									delsensletters.add("D");
+									delpoints.add(fsize + dnis - 1 + DNs);
+								}
+								if((clv.get(i2).equals("N")))
+									delsensletters.add("d");
+									// System.out.print("\n->" + (fsize+dis-1 + Ds)
+									// +"<-\n");
+							}
+							DNs = DNs + dnis - 1;
+							fsize = fsize + cnv.get(i2);
+
+							// fsize=fsize+cnv.get(i);
+							// System.out.println("Deletion point will not count in fragment size for now.");
+							// System.out.println(delpoints);
+						}
+						// System.out.println(fsize);
+					
+						if (clv.get(i2).equals("I")) 
+						{
+							// for(int ins=1; ins<=cnv.get(i2); ins++)
+							// inspoints.add(fsize+ins-1);
+							insbs = "";
+							for (int j = currpos; j < currpos + cnv.get(i2); j++)
+							{
+								insbs = insbs + ffrag.get(j);
+								inspoints.add(j);
+								// ffrag.remove(j);
+								// j=j-1;
+							}
+							insstr = (position + fsize - 1) + "_" + cnv.get(i2)
+								+ "_" + insbs;
+							inss.add(insstr);
+							// fsize=fsize+cnv.get(i2);
+							currpos = currpos + cnv.get(i2);
+						}
+					
+					}
+				
+//					put insertions(Is) on read using the insertion stored points(indeces)
+//					and then remove those Is and their mirrored qualities using the inserted Ises' indeces
+					for (int i3 = 0; i3 < inspoints.size(); i3++)
+					{
+						ffrag.set(inspoints.get(i3), "I");
+						// System.out.print(inspoints.get(i3)+ " ");
+					}
+
+					int ICounter = 0;
+					// System.out.println();
+
+					for (int i3 = 0; i3 < ffrag.size(); i3++)
+					{
+						if (ffrag.get(i3).equals("I"))
+						{
+							ffrag.remove(i3);
+							fqual.remove(i3);
+							// System.out.println("'I' detected!  : " + i3);
+							if (i3 > 1)
+								i3 = i3 - 1; // Vectors change dynamically their size
+							// in 'element removal' the next element will acquire
+							// the current index
+							// the current index must be then decreased in order for
+							// that element to
+							// be able to be checked with the next iteration.
+							ICounter = ICounter + 1;
+						}
+					}
+//					Now quality and frag strings have no insertions on them 
+				
+					//
+					// System.out.println(ffrag); System.out.println(fqual);
+					// System.out.println(delpoints); System.out.println(fragment);
+					// System.out.println(rd); System.out.println(rd1);
+					// System.out.println(gic); System.out.println(gic1);
+					//
+
+//				
+//					for (int i3 = 0; i3 < delpoints.size(); i3++)
+//					{
+//						// ffrag.add(delpoints.get(i), "D" + i);
+//						ffrag.add(delpoints.get(i3) - i3, "D");
+//						fqual.add(delpoints.get(i3) - i3, "D");
+//					}
+//	
+					// System.out.println(delsenspoints.size());
+					for (int i3 = 0; i3 < delsenspoints.size(); i3++)
+					{
+						// ffrag.add(delpoints.get(i), "D" + i);
+						if(delsensletters.get(i3).equals("D"))
+						{
+							//System.out.println(ffrag.size() + "  " + (delsenspoints.get(i3) -i3));
+							//System.out.println(cigar);
+							ffrag.add(delsenspoints.get(i3) - i3, "D");
+							fqual.add(delsenspoints.get(i3) - i3, "D");
+						}
+						else if(delsensletters.get(i3).equals("d"))
+						{
+							ffrag.add(delsenspoints.get(i3) - i3, "d");
+							fqual.add(delsenspoints.get(i3) - i3, "d");
+						}
+					}
+					// System.out.println(ffrag);
+					// System.out.println(fqual);
+		
+		
+					fifrag = "";
+					for (int i3 = 0; i3 < ffrag.size(); i3++)
+						fifrag = fifrag + ffrag.get(i3);
+
+					fiqual = "";			
+					for (int i3 = 0; i3 < fqual.size(); i3++)
+						fiqual = fiqual + fqual.get(i3);
+
+					delsstr = "";
+					// returned read name will be cmn = common if no deletions and
+					// no insertions have been detected.
+					readnmreturn = "cmn";
+					if (dels.size() > 0)
+					{
+						for (int in = 0; in < dels.size(); in++)
+						{
+							if (in < dels.size() - 1)
+								delsstr = delsstr + dels.get(in) + ",";
+							if (in == dels.size() - 1)
+								delsstr = delsstr + dels.get(in);
+						}
+						// returned read name will be cmn = common if no deletions
+						// and no insertions have been detected.
+						readnmreturn = readname;
+					}
+					if (dels.size() == 0)
+						delsstr = "none";
+
+					inssstr = "";
+					if (inss.size() > 0)
+					{
+						for (int in = 0; in < inss.size(); in++)
+						{
+							if (in < inss.size() - 1)
+								inssstr = inssstr + inss.get(in) + ",";
+							if (in == inss.size() - 1)
+								inssstr = inssstr + inss.get(in);
+						}
+						// returned read name will be cmn = common if no deletions
+						// and no insertions have been detected.
+						readnmreturn = readname;
+					}
+					if (inss.size() == 0)
+						inssstr = "none";
+					// 03/06/2015 Changed to accept X and Y chromosome (chrom to
+					// chromS)
+					secres.add(chromS + "\t"
+						+ (position)
+						+ "\t"
+						// 03/06/2015 Changed to accept X and Y chromosome
+						// (chrom to chromS)
+						+ (position + fifrag.length() - 1) + "\t" + fifrag
+						+ "\t" + fiqual + "\t" + delsstr + "\t" + inssstr
+						+ "\t" + cigar + "\t" + curcig + "\t" + prvcig + "\t"
+						+ readnmreturn + "\t" + filenm);
+				}
+			}  // distance cutoff
+
+			// Position already includes the first place of length therefore to
+			// find read end actual position add length and subtract one
+			}
+		}
+		//for(int y=0; y<80; y++)
+			//System.out.println(secres.get(y));
+		//System.exit(0);
+
+		System.out.println("................Preparation  Ended.");
+		System.out.println("	End of 'PrepareTheData' Method!");
+		return secres;
+	}
+*/
 	
 	public static Vector<String> PrepareTheDataAndInDlsEx(Vector<String> res1data) {
 		System.out.println("	Start of 'PrepareTheData' Method!");
@@ -9153,7 +10666,7 @@ m++;
 		String mutline="";
 		double sitefreq = 0.0;
 		int tref = 0, talt = 0, stdv = 0;
-
+		int counter=0;
 		for (int i = 0; i < tbdt.size(); i++) 
 		{
 			line = tbdt.get(i);
@@ -9179,13 +10692,18 @@ m++;
 //		if alternative field contains two or more letters(Nucleotides), then
 //		the next enclosed if and for loop statments will create separate
 //		site line for each alternative Nucleotide for this particular position.
-			if (!ref.equals(alt))
+			if(!(alt.equals(ref)) )
+					counter =counter + 1;
+			
+			if(alt.charAt(0)!='E')
 			{
-				if(alt.length()>1)
+				if (!ref.equals(alt))
 				{
-					for(int j=0; j<alt.length(); j++)
+					if(alt.length()>1)
 					{
-						mutline=wrs[0] + "\t" + wrs[1] + 
+						for(int j=0; j<alt.length(); j++)
+						{
+							mutline=wrs[0] + "\t" + wrs[1] + 
 						"\t" + wrs[2] + "\t" + wrs[3] + 
 						"\t" + wrs[4] + "\t" + alt.charAt(j) + 
 						"\t" + wrs[6] + "\t" + wrs[7] + 
@@ -9193,13 +10711,14 @@ m++;
 						"\t" + wrs[10] + "\t" + wrs[11] + 
 						"\t" + wrs[12]; 
 						stofint.add(mutline);
+						}
 					}
+					else
+						stofint.add(line);
 				}
-				else
-					stofint.add(line);
 			}
 		}
-
+		//System.out.println(stofint.size());
 //		11/03/15 adapted to handle more alternative options for same position
 //		if alternative field contains two or more letters(Nucleotides), then
 //		the previous enclosed if and for loop statment will create separate
@@ -9209,7 +10728,7 @@ m++;
 		// one time
 
 		// coverage for sites of interest
-		System.out.println("Sites size = " + stofint.size());
+		System.out.println(counter + " Sites size = " + stofint.size());
 
 		String decide = "", lineres = "";
 
@@ -9219,6 +10738,8 @@ m++;
 		// (somatic|germline|unknown|omitted)";
 
 		Vector<String> results = new Vector<String>();
+		String Header = "CHR\tPOS\tREF\tEXP\tCOV\tFREQ(#EXP/COV)\tP-VALUE\tCONCLUSION";	
+		results.add(Header);
 
 		Vector<Double> AtoCandTtoG = new Vector<Double>();
 		Vector<Double> AtoGandTtoC = new Vector<Double>();
@@ -9289,7 +10810,7 @@ m++;
 			CtoGandGtoC.add(mirror.get(p));
 		CtoGandGtoC = sortVector(CtoGandGtoC);
 
-		System.out.println("Combined");
+		System.out.println("--Combined");
 
 		// c) 1. Go through each site (String line element of 'stofint' Vector)
 		// and calculate its frequency :
@@ -9330,6 +10851,7 @@ m++;
 			if (alt.equals("G"))
 				talt = Integer.parseInt(wrds[10]);
 			dv = Integer.parseInt(wrds[6]);
+
 			if (dv > 0)
 				sitefreq = (double) talt / (double) dv; // it could be zero
 			else
@@ -9375,23 +10897,33 @@ m++;
 				STATEMENT = "somatic";
 			else
 				STATEMENT = "undefined";
+
+			if (pval==0.0)
+			{
+				pval = 1/(2*(double)cur_size);
+				if(STATEMENT.equals("germline"))
+					STATEMENT="Sens_germline";
+				if(STATEMENT.equals("somatic"))
+					STATEMENT="Sens_somatic";
+			}
+
 			//String Header = "CHR\tPOS\tREF\tEXP\tCOV\tFREQ(#EXP/COV)\tP-VALUE\tCONCLUSION";	
 			lineres = wrds[0] + "\t" + // chromosome
-					wrds[1] + "\t" + // site
-					// "." + "\t" +
-					// wrds[2] + "\t" + // x
-					// wrds[3] + "\t" + // y
-					wrds[4] + "\t" + // base_expected (same as reference) 
-					wrds[5] + "\t" + // alternative (not same as reference) now it is expected (we expect it as somatic) 
-					wrds[6] + "\t" + // number_base_expected 
-					// wrds[7] + "\t" + // number_of_As
-					// wrds[8] + "\t" + // number_of_Cs
-					// wrds[9] + "\t" + // number_of_Ts
-					// wrds[10]; // number_of_Gs
-					// + "\t" +
-					// wrds[11] + "\t" + // number_of_Ds
-					// wrds[12]; // number_of_Ps
-					+sitefreq + "\t" + pval + "\t" + STATEMENT;
+			wrds[1] + "\t" + // site
+			// "." + "\t" +
+			// wrds[2] + "\t" + // x
+			// wrds[3] + "\t" + // y
+			wrds[4] + "\t" + // base_expected (same as reference) 
+			wrds[5] + "\t" + // alternative (not same as reference) now it is expected (we expect it as somatic) 
+			wrds[6] + "\t" + // number_base_expected 
+			// wrds[7] + "\t" + // number_of_As
+			// wrds[8] + "\t" + // number_of_Cs
+			// wrds[9] + "\t" + // number_of_Ts
+			// wrds[10]; // number_of_Gs
+			// + "\t" +
+			// wrds[11] + "\t" + // number_of_Ds
+			// wrds[12]; // number_of_Ps
+			+sitefreq + "\t" + pval + "\t" + STATEMENT;
 
 			// /(double)curfrq.size();
 			// System.out.println(decide + "\t" + pval + "\t" + frac + "\t" +
@@ -9401,72 +10933,7 @@ m++;
 			// results.add(decide + "\t" + pval + "\t" + frac + "\t" + lineres);
 			results.add(lineres);
 		}
-		
-		String Header = "CHR\tPOS\tREF\tEXP\tCOV\tFREQ(#EXP/COV)\tP-VALUE\tCONCLUSION";	
-//		find minimum pvalue greater than zero
-		Vector<String>finalresults = new Vector<String>();
-		finalresults.add(Header);
-		String chromosomes="", sites="", nmbexps="", 
-				sitefreqs="", base_expecteds="", 
-				alternatives="", pvals="", statements="";
-		int cov=0;
-		
-		double pvl=0.0, pvmin=1.0; // pvalue, minimum pvalue
-		double pvrplacezero=0.0;  // minimum pvalue greater than zero divided by 2
-		
-		for(int i=0; i<results.size(); i++)
-		{
-			line=results.get(i);
-			String[] wrds = line.split("\t");
-			pvals =  wrds[6];
-			pvl=Double.parseDouble(pvals);
-			if( (pvl>0) && (pvl<pvmin) )
-				pvmin=pvl;
-		}
-		pvrplacezero=pvmin/2;
-		
-		String firesln="";
-		for(int i=0; i<results.size(); i++)
-		{
-			firesln="";
-			line=results.get(i);
-			String[] wrds = line.split("\t");
-			chromosomes = wrds[0];		//	chromosome
-			sites = wrds[1];		//	site
-			base_expecteds = wrds[2];	//	base_expected
-			alternatives = wrds[3];		//	alternative
-			nmbexps = wrds[4];		//	number_base_expected
-			cov = Integer.parseInt(nmbexps);
-			sitefreqs = wrds[5];
-			pvals =  wrds[6];
-			pvl=Double.parseDouble(pvals);
-			statements = wrds[7];
-			
-			//if(pvl==0.0)
-			//{
-			//	pvl=pvrplacezero;
-			//	pvals=Double.toString(pvl);
-			//	statements="SensSomatic";
-			//}
-
-			if(pvl==0.0)
-			{
-				pvl=pvrplacezero;
-				pvals=Double.toString(pvl);
-				if(cov>=covr)
-					statements="Sens_"+ statements;
-			}
-			firesln=chromosomes  + "\t" + 
-					sites + "\t" + 
-					base_expecteds + "\t" + 
-					alternatives + "\t" + 
-					nmbexps + "\t" + 
-					sitefreqs + "\t" + 
-					pvals + "\t" + 
-					statements;
-			finalresults.add(firesln);
-		}
-		writeToFile(outres, finalresults);
+		writeToFile(outres, results);
 		System.out.println("End   Decide method.");
 	}
 
@@ -9623,7 +11090,12 @@ m++;
 								qt = (double) tMut / (double) dv; 
 // 0 divide the number of total specific mutations found in a position
 								{ // by the position coverage
-									if ((double) tMut / (double) dv < 0.005) 
+//			10/30/2016 exclude only Germline AFs when creating noise background
+				
+//									if ((double) tMut / (double) dv < 0.005) 
+									if ((double) tMut / (double) dv < 0.35) 
+//			10/30/2016 exclude only Germline AFs when creating noise background
+
 // 5 include only the range of cut off
 									{
 										sbst.add(qt); // Then add the qt in the
@@ -10086,12 +11558,11 @@ m++;
 
     public static Vector<String> IndependentGenomeRefParser(String prm_pth,
             String genref_pth) throws FileNotFoundException, IOException,
-            InterruptedException {
+            InterruptedException
+    {
 
-        System.out.println("Reference Parser Start");
-
+        System.out.println("Reference Parser Start!");
         List<String[]> sites = new ArrayList<String[]>();
-
         File pr = new File(prm_pth);
         String prfnm = pr.getName();
         Vector<String> prmsits = new Vector<String>();
@@ -10103,16 +11574,18 @@ m++;
         // vector that controls the chromosomal flow of the loop
         // it gives sign for what list of sites(grouped in 
         // respect of chromosome) will be processed retrieve sort and merge 
+        
+        //  prmsits = MergeSamePosSites(prmsits);
+         
         orprmsits = readTheFileIncludeFirstLine(prm_pth, prfnm);
         orprmsits = SortSites(orprmsits);
-	//for(int u=0; u<prmsits.size(); u++)
-		//System.out.println(prmsits.get(u));
-        //  prmsits = MergeSamePosSites(prmsits);
-
-
+        // for(int u=0; u<orprmsits.size(); u++)
+        //	System.out.println(u + " " + orprmsits.get(u));
         prmsits = MergeOverlappinSites(orprmsits);
-        //for (int i = 0; i < prmsits.size(); i++)
-            //System.out.println(prmsits.get(i));
+        
+        
+        for (int i = 0; i < prmsits.size(); i++)
+            System.out.println(prmsits.get(i));
 	// Exit();
         // Create a sorted set of primers chromosome names in order to be used
         // as a guide for processing the sites in a chromosomal packets
@@ -10352,36 +11825,222 @@ m++;
                         if (words.length == 1)
                         {
                             System.out.println("length=1");
-                            
-              
-                        }
-                        
+                        }        
                     }
                 }
-            
-            
-            
-            
-            
         }
         if (missed_sites.size() > 0) {
             System.out.println("The following sites will not be processed : ");
             for (int i = 0; i < missed_sites.size(); i++)
                 System.out.println(missed_sites.get(i));
         }
-        
-        initprstrsends = GenerateInitialIntervalList(orprmsits, prmsfnl);
+
+        //System.out.println("1  " + prmsfnl.get(0));
+        //System.out.println("2  " + prmsfnl.get(1));
+        //System.out.println("1  " + orprmsits.get(0));
+        //System.out.println("2  " + orprmsits.get(1));
+	//writeToFile("/home/m026918/Leucippus/refreturn.tsv", prmsfnl);
+	prmsfnl = testSitesReference(prmsfnl);
+	//writeToFile("/home/m026918/Leucippus/refreturn02.tsv", prmsfnl);
+	for(int i=0; i<prmsfnl.size(); i++)
+		System.out.println(prmsfnl.get(i));
+//	sites with insuficiend fields are not included in the orprmsits
+//  and in 	
+    initprstrsends = GenerateInitialIntervalList(orprmsits, prmsfnl);
         
         return prmsfnl;
     }
 
-    
+// Group of methods that test the Sites Reference field provided in the interval file
+// If the site-reference is mirrored then warning message is printed the alternative
+// field is mirrored and the informative sites vector is updated
+// Curently the method doesnt correct the reference nucleotide provided by user
+// If there is error in reference then the aternative is replaced by genome reference 
+// nucleotide and the reference filed is going to be corected later in tables
+// It looks that tables retrieve referense field from genome sequence. 
+	public static Vector<String> testSitesReference(Vector<String> stvs)
+	{
+
+	Vector<String> results = new Vector<String>();
+	Vector<Integer> possi = new Vector<Integer>();
+	Vector<Integer> sites = new Vector<Integer>();
+	Vector<Character> refc= new Vector<Character>();
+	String cr="",start="",end="", ResSeq="",POS="",REF="",ALT="";
+	String resALT="", resline="", al="";
+	char r='p', pr='p';
+	int starti=0, endi=0, size=0, incr=0, incrr=0;
+		
+	for(int i=0; i<stvs.size(); i++)
+	{
+		possi = new Vector<Integer>();
+		sites = new Vector<Integer>();
+		refc= new Vector<Character>();
+						
+		String[] wds = stvs.get(i).split("\t");
+		//System.out.println(vc.get(i));
+		cr=wds[0];
+		start=wds[1];
+		end=wds[2];
+		ResSeq=wds[3];
+		POS=wds[4];
+		REF=wds[5];
+		ALT=wds[6];
+			
+		starti=Integer.parseInt(start);
+		endi=Integer.parseInt(end);
+		size=endi-starti+1;
+		//System.out.println(size);
+		for(int j=0; j<size; j++)
+		{
+			incr = starti+j;
+			possi.add(incr);
+			//System.out.println(incr);
+		}
+		//System.out.println(size + " " + possi.get(1) + " " + possi.get(possi.size()-1));
+		char[] carrs = ResSeq.toCharArray();
+
+		String[] refs = REF.split(",");
+		String[] alts = ALT.split(",");
+		String[] posstrarr = POS.split(",");
+
+		for(int o1=0; o1<posstrarr.length; o1++)
+			sites.add(Integer.parseInt(posstrarr[o1]));
+		for(int o2=0; o2<refs.length; o2++)
+			refc.add(refs[o2].charAt(0));
+		//for(int o3=0; o3<alts.length; o3++)		
+		//altc.add(alts[o3].charAt(0));
+
+		for(int k=0; k<sites.size(); k++)
+		{
+			incr = sites.get(k); 
+			//System.out.println(sites.get(k));
+			for(int l=0; l<possi.size(); l++)
+			{
+				incrr = possi.get(l);
+				//System.out.println(possi.get(l));
+				if (incr==incrr)
+				{
+					r=carrs[l];
+					pr=refc.get(k);
+					al=alts[k];
+					//System.out.println(cr + " " + sites.get(k) + " " + r + " - " + pr + " " + al);
+					if(r!=pr)
+					{
+						if(ismirrored(r,pr))
+						{
+							System.out.println("Warning site reference  mirrored: chr :" + cr + " " + sites.get(k) + " " + r + 
+										" \nvariant ref: " + pr + "  alt: " + al);
+								al=mirroralt(al);
+								System.out.println("changed to: chr :" + cr + " " + sites.get(k) + " " + r + " " + al+"\n");
+								alts[k] = al;
+						}
+						else
+						{
+							//System.out.println(r + " - " + pr + " " + al + "-" + r + " "+ sites.get(k) + " " + possi.get(l) + " err");
+							al=""+r;
+							alts[k] = al;
+						}
+					}
+				}
+			}
+		}
+		for(int y=0; y<alts.length; y++)
+			resALT=resALT + alts[y] +",";
+		if(resALT.charAt(resALT.length()-1)==',')
+			resALT=resALT.substring(0,resALT.length()-1);
+					
+		resline = cr + "\t" + start + "\t" + end + "\t" + ResSeq + "\t" + POS + "\t" + REF + "\t" + resALT;
+		resALT="";
+		results.add(resline);
+	}
+	return results;
+   }
+
+    	public static boolean ismirrored(char r, char pr)
+	{
+		boolean res=false;
+		if     ((r=='A') && (pr=='T'))
+			res=true;
+		else if((r=='T') && (pr=='A'))
+			res=true;			
+		else if((r=='C') && (pr=='G'))
+			res=true;			
+		else if((r=='G') && (pr=='C'))
+			res=true;
+		return res;
+	}
+	public static char mirrorbase(char cr)
+	{
+		char res='P';
+		if(cr=='A')
+			res = 'T';
+		else if(cr=='T')
+			res = 'A';
+		else if(cr=='C')
+			res = 'G';
+		else if(cr=='G')
+			res = 'C';
+		return res;
+	}
+	public static String uniqueAlt(String alt)
+	{
+		Vector<String> vc = new Vector<String>();
+		String res ="";
+		Set<String> st = new HashSet<String>();
+		for(int i=0; i<alt.length(); i++)
+			st.add(alt.substring(i, i+1));	
+		for (String s : st)
+			res = res +s;
+		return res;
+	}
+	
+	public static String mirroralt(String alt)
+	{
+		
+		alt = uniqueAlt(alt);
+		String res ="", finres="", res1="" ;
+		String cur ="";
+		char chr='P';
+		for (int i=0; i<alt.length(); i++)
+		{
+			chr=alt.charAt(i);
+			res = res + mirrorbase(chr);
+		}
+		
+		for(int k=0; k<res.length(); k++)
+		{
+			cur=res.substring(k,k+1);
+			if(cur.equals("A"))
+				finres="A";
+		}
+
+		for(int k=0; k<res.length(); k++)
+		{
+			cur=res.substring(k,k+1);
+			if(cur.equals("C"))
+				finres=finres +"C";
+		}
+		for(int k=0; k<res.length(); k++)
+		{
+			cur=res.substring(k,k+1);
+			if(cur.equals("T"))
+				finres=finres +"T";
+		}
+		for(int k=0; k<res.length(); k++)
+		{
+			cur=res.substring(k,k+1);
+			if(cur.equals("G"))
+				finres=finres +"G";
+		}
+		
+		return finres;
+	}
 
 // -------------------------------------------------------------------------------------- \\  
 // -------------------------------------------------------------------------------------- \\  
 // -------------------------------------------------------------------------------------- \\  
-//  The following methods populate a String vector. Each Vector String element 
-//	corresponds to all unique initial intervals contained in each merged interval call
+// The following methods populates a String vector. Each Vector String element 
+// corresponds to all unique initial intervals contained in each merged interval call
 // The element contains interval1start-space-interval1end,interval2start-space-interval2end,...     
 // The index of each element correspond to the index of the particular merged interval(s)
     public static Vector<String> GenerateInitialIntervalList(Vector<String> initprms, Vector<String> mrgdprmrs)
@@ -10434,7 +12093,6 @@ m++;
 	
 	public static int[] convertToIntegerArray(String line)
 	{
-	
 		String[] numberStrs = line.split(",");
 		int[] numbers = new int[numberStrs.length];
 		for(int i = 0;i < numberStrs.length;i++)
@@ -10443,7 +12101,7 @@ m++;
 		}
 		return numbers;
 	}
-	
+
 	public static boolean notinList(String cum, String inq)
 	{
 		boolean rs = true;
@@ -10457,32 +12115,11 @@ m++;
 		}
 		return rs;
 	}    
-    
+
 // -------------------------------------------------------------------------------------- \\  
 // -------------------------------------------------------------------------------------- \\  
 // -------------------------------------------------------------------------------------- \\  
-   
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+	
 /**
  * Method that identifies overlapping sites referred to same chromosome.
  * It creates a common information about overlapping sites and updates the
@@ -10522,6 +12159,7 @@ m++;
 		{
 			crmq = chroms[j];
 			chrmsite = new Vector<String>();
+//			Interval Vector Sorted without header (tbdt)		
 			for (int i = 0; i < tbdt.size(); i++) 
 			{
 				line = tbdt.get(i);
@@ -10536,16 +12174,15 @@ m++;
 			}
 			for (int k = 1; k < chrmsite.size(); k++) 
 			{
-
 				lincpp = chrmsite.get(k - 1); // previous site
 				lincpc = chrmsite.get(k); // current site
 				
 				String[] wordsp = lincpp.split("\t");
-				CHROM = wordsp[0];
-				POS = wordsp[1];
-				REF = wordsp[2];
-				ALT = wordsp[3];
-				Left_start = wordsp[4];
+				CHROM	= wordsp[0];
+				POS 	= wordsp[1];
+				REF 	= wordsp[2];
+				ALT 	= wordsp[3];
+				Left_start 	= wordsp[4];
 				Right_start = wordsp[5];
 
 				String[] wordsc = lincpc.split("\t");
@@ -10659,7 +12296,6 @@ m++;
 	}
 
 	/**
-
  	 * The following method is useful when alternative fields contain more than 
 	 * one nucleotide. It is called from 'MergeOverlappinSites' method.
 	 * The combination of these methods is part of IndependentGenomeReferenceParser
@@ -10805,40 +12441,178 @@ m++;
 		// Vector<Double> db = new Vector<Double>();
 		return remained;
 	}
-
-/**
-	 * 'SortSites' method accepts a String Vector that holds all unsorted sites.
-     * It sorts them in ascending order.
-	 * @param chnsites Vector<String> 
-	 *            : String Vector with unsorted sites
-	 * @return results : Vector<String> with sorted sites
+/** Method that accepts a String Vector. The elements of the Vector are the lines of the interval file
+* The method split(tab) the first Vector-element into words and checks if Word[1](position), Word[4], and Word[5] hold
+* numeric values(indexing start from 0). If at least one of them is not numeric then the first line will be 
+* perceived as header.	Next the method will Sort the sites according to chromosome and position.
+*
+*
 */
 	
-	public static Vector<String> SortSites(Vector<String> chnsites) {
-
+	public static Vector<String> SortSites(Vector<String> chnsites)
+	{
 		Vector<String> results = new Vector<String>();
 		Vector<String> chmsts = new Vector<String>();
+		boolean foundheader = false;
+		String header = chnsites.get(0);
 		// build a sorted array of chromosomes. ( 1, 2, 3, ... 22, X, Y )
+		// Get rid of header if it exists	
+		String[] headtest = header.split("\t");
+		if(headtest.length<=5)
+		{
+			System.out.println(
+				"Format of interval file not acceptable.\n" +
+				"Interval file with header or not must contain at least the folowing fields in order:\n" +
+				"chrom, pos, ref, alt leftprimerstart, rightprimerstart\nin tab delimited format.\n"+
+				"Exit.");
+			Exit();
+		}
+		else if(headtest.length>5)
+		{	
+			if( (!(isPosUnsignInteger(headtest[1]))) || (!(isPosUnsignInteger(headtest[4]))) || (!(isPosUnsignInteger(headtest[5]))) )
+			{	
+				chnsites.remove(0);
+				System.out.println("Interval file contains header!");
+				System.out.println("'" + header);
+				foundheader = true;
+			}
+			else if(isPosUnsignInteger(headtest[1]) && isPosUnsignInteger(headtest[4]) && isPosUnsignInteger(headtest[5]) )
+				System.out.println("Interval file without header!");
+		}
+//	##########  Sorting process	###########	
+//      Create a chromosome Array start
+//		chromosomes 1,2,... ,23,X,Y
 		String crms = "", crm = "", crmq;
 		for (int i = 1; i < 23; i++)
 			crms = crms + i + " ";
 		crms = crms + "X Y";
-		String[] chroms = crms.split(" "); // Chromosome array
-		// String header = "CHROM	POS	REF	ALT	Left_start	Right_start";
-		String header = "";
-		header = chnsites.get(0);
+		String[] chroms = crms.split(" "); 
+//	    Create a chromosome Array end
+		
+// 		String header = "CHROM	POS	REF	ALT	Left_start	Right_start";
+//		String header = "";
+//		header = chnsites.get(0);
 		String stlne = "", CHROM = "", POS = "", REF = "", ALT = "", Left_start = "", Right_start = "";
-		if (chnsites.size() > 0) {
-			header = chnsites.get(0);
-			results.add(header);
+
+//		results.add(header);
 //      loop that goes through all cromosomes in ascending order 
 //		retrieves all sites of current chromosome
 //      sorts those sites according to 'Left Start' word(using 'SortChromSites' method
 //	    inserts the sorted sited in the results Vector
 //      When the loop ends results Vector has all sites sorted according to chromosom
-//      and to Left Start.			
-			for (int j = 0; j < chroms.length; j++) // Go through each
-													// chromosome and
+//      and to Left Start(header(if there was one) was removed.
+		System.out.println("(interval field-1 : Chromosome field Format : chr1-chr22,chrX,chrY or 1-22,X,Y\n" + 
+		"Sites with errors in Chromosome field will be omitted.");		
+		if (chnsites.size() > 0) {
+			for (int j = 0; j < chroms.length; j++) // Go through each chromosome and
+													// go through data and retrieve all intervals contained 
+													// in  this chromosome
+			{
+				chmsts = new Vector<String>();
+				crm = chroms[j];
+				for (int i = 0; i < chnsites.size(); i++) {
+					stlne = chnsites.get(i);
+					String[] ws = stlne.split("\t");
+					CHROM = ws[0];
+					if (crm.equals(CHROM))
+					{
+						if(ws.length>5 && 
+							isPosUnsignInteger(ws[1]) && 
+							isPosUnsignInteger(ws[4]) && 
+							isPosUnsignInteger(ws[5]) &&
+							isoneOfFourBases(ws[2]) )
+						   chmsts.add(stlne);
+						else
+						{
+							System.out.println(ws.length + 
+									"\nInterval Format/Length Error\n"+
+									"Requirements : \n" + 
+									"1. length>=6, \n" + 
+									"2. fields 2, 5, 6 must be positive integers.\n" + 
+									"3. field 3 values : A or C or T or G.\n" + 
+									"The following site will not be included :\n" + 
+									stlne +"\n");
+							// Add checking for other fields Chromosome, Nucleotide reference.
+						}
+					}	
+				}
+
+				chmsts = SortChromSites(chmsts); // sort all sites for this chromosome
+				for (int r = 0; r < chmsts.size(); r++) {
+					results.add(chmsts.get(r)); // add each site for this chromosome to results vector
+				}
+			}
+		}
+		System.out.println("Sites Sorted (Chromosome, Left Start).\n");
+		return results;
+	}
+	// Test variant reference field 
+	public static boolean isoneOfFourBases(String base)
+	{
+		boolean result = false;
+		if(base.equals("A") ||
+		   base.equals("C") ||
+		   base.equals("T") ||
+		   base.equals("G") )
+			result = true;
+		return result;
+	}
+	
+	public static Vector<String> SortSitesback(Vector<String> chnsites)
+	{
+		Vector<String> results = new Vector<String>();
+		Vector<String> chmsts = new Vector<String>();
+		boolean foundheader = false;
+		// build a sorted array of chromosomes. ( 1, 2, 3, ... 22, X, Y )
+		// Get rid of header if it exists	
+		String[] headtest = chnsites.get(0).split("\t");
+		if(headtest.length<=5)
+		{
+			System.out.println(
+				"Format of interval file not acceptable.\n" +
+				"Interval file with header or not must contain at least the folowing fields in order:\n" +
+				"chrom, pos, ref, alt leftprimerstart, rightprimerstart\nin tab delimited format.\n"+
+				"Exit.");
+			Exit();
+		}
+		else if(headtest.length>5)
+		{	
+			if( (!(isNumeric(headtest[1]))) || (!(isNumeric(headtest[4]))) || (!(isNumeric(headtest[5]))) )
+			{	
+				chnsites.remove(0);
+				System.out.println("Interval file contains header!");
+				System.out.println("'" + headtest);
+				foundheader = true;
+			}
+			else if(isNumeric(headtest[1]) && isNumeric(headtest[4]) && isNumeric(headtest[5]) )
+				System.out.println("Interval file without header!");
+		}
+//	##########  Sorting process	###########	
+//      Create a chromosome Array start
+//		chromosomes 1,2,... ,23,X,Y
+		String crms = "", crm = "", crmq;
+		for (int i = 1; i < 23; i++)
+			crms = crms + i + " ";
+		crms = crms + "X Y";
+		String[] chroms = crms.split(" "); 
+//	    Create a chromosome Array end
+		
+// 		String header = "CHROM	POS	REF	ALT	Left_start	Right_start";
+//		String header = "";
+//		header = chnsites.get(0);
+		String stlne = "", CHROM = "", POS = "", REF = "", ALT = "", Left_start = "", Right_start = "";
+
+//		results.add(header);
+//      loop that goes through all cromosomes in ascending order 
+//		retrieves all sites of current chromosome
+//      sorts those sites according to 'Left Start' word(using 'SortChromSites' method
+//	    inserts the sorted sited in the results Vector
+//      When the loop ends results Vector has all sites sorted according to chromosom
+//      and to Left Start(header(if there was one) was removed.
+		if (chnsites.size() > 0) {
+			for (int j = 0; j < chroms.length; j++) // Go through each chromosome and
+													// go through data and retrieve all intervals contained 
+													// in  this chromosome
 			{
 				chmsts = new Vector<String>();
 				crm = chroms[j];
@@ -10850,15 +12624,85 @@ m++;
 						chmsts.add(stlne);
 				}
 				
-				chmsts = SortChromSites(chmsts);
+				chmsts = SortChromSites(chmsts); // sort all sites for this chromosome
 				for (int r = 0; r < chmsts.size(); r++) {
-					results.add(chmsts.get(r));
+					results.add(chmsts.get(r)); // add each site for this chromosome to results vector
 				}
 			}
 		}
 		System.out.println("Sites Sorted (Chromosome, Left Start).");
 		return results;
 	}
+	
+	
+/**
+	 * 'SortSites' method accepts a String Vector that holds all unsorted sites.
+     * It sorts them in ascending order.
+	 * @param chnsites Vector<String> 
+	 *            : String Vector with unsorted sites
+	 * @return results : Vector<String> with sorted sites
+
+	
+	public static Vector<String> SortSites(Vector<String> chnsites) {
+
+		boolean hasheader = false;
+		Vector<String> results = new Vector<String>();
+		Vector<String> chmsts = new Vector<String>();
+		
+		// build a sorted array of chromosomes. ( 1, 2, 3, ... 22, X, Y )
+		// Get rid of header if it exists
+		String ifheder=chnsites.get(0);
+		String[] headtest = ifheder.split("\t");
+		if(headtest.length>5)
+		{
+			if( (!(isNumeric(headtest[1]))) || (!(isNumeric(headtest[4]))) || (!(isNumeric(headtest[5]))) )
+			chnsites.remove(0);
+			hasheader = true;
+		}
+		String crms = "", crm = "", crmq;
+		for (int i = 1; i < 23; i++)
+			crms = crms + i + " ";
+		crms = crms + "X Y";
+		String[] chroms = crms.split(" "); // Chromosome array
+		// String header = "CHROM	POS	REF	ALT	Left_start	Right_start";
+		String header = "";
+		//header = chnsites.get(0);
+		String stlne = "", CHROM = "", POS = "", REF = "", ALT = "", Left_start = "", Right_start = "";
+		if (chnsites.size() > 0) {
+			//header = chnsites.get(0);
+			if (hasheader==true)	
+				results.add(header);
+//      loop that goes through all cromosomes in ascending order 
+//		retrieves all sites of current chromosome
+//      sorts those sites according to 'Left Start' word(using 'SortChromSites' method
+//	    inserts the sorted sited in the results Vector
+//      When the loop ends results Vector has all sites sorted according to chromosom
+//      and to Left Start.			
+			for (int j = 0; j < chroms.length; j++) // Go through each
+													// chromosome and
+			{
+				chmsts = new Vector<String>();
+				crm = chroms[j];
+				for (int i = 0; i < chnsites.size(); i++) 
+				{
+					stlne = chnsites.get(i);
+					String[] ws = stlne.split("\t");
+					CHROM = ws[0];
+					if (crm.equals(CHROM))
+						chmsts.add(stlne);
+				}
+				
+				chmsts = SortChromSites(chmsts);
+				for (int r = 0; r < chmsts.size(); r++) {
+					results.add(chmsts.get(r));
+					System.out.println((r + 1) + ". " +   chmsts.get(r));
+				}
+			}
+		}
+		System.out.println("Sites Sorted (Chromosome, Left Start).");
+		return results;
+	}
+*/
 	
 /**
  * The method accepts a String Vector. Its elements are information for 
@@ -11082,6 +12926,38 @@ m++;
 		return vct;
 	}
 
+//	Requirement for bam file lines is to have minimum word length;
+	public static Vector<String> readTheFileIncludeFirstLineWrdlen(String fnpath,
+			String filename, int wl) throws IOException, InterruptedException {
+		System.out.println("	    Start ReadTheFile method");
+		System.out.println("	    Start Read File : " + filename);
+		// Thread.sleep(4000);
+		File fl = new File(fnpath);
+		Vector<String> vct = new Vector<String>();
+		BufferedReader br;
+		String line = "";
+		int count = -1;
+		br = new BufferedReader(new FileReader(fnpath));
+		while ((line = br.readLine()) != null) 
+		{
+			count = count + 1;
+			String[] wds = line.split("\t");
+			if ((count >= 0) && (line.length() > 0))
+				if(wds.length>wl)
+				vct.add(line);
+		}
+		System.out.println("		file size = " + fl.length() + " Bytes");
+		System.out.println("		file size = "
+				+ ((double) fl.length() / (double) 1000000) + " MB");
+
+		br.close();
+		// System.out.println("First line :" + vct.get(0));
+		// System.out.println("Last line :" + vct.get(vct.size()-1));
+		System.out.println("	    End  Read  File : " + filename);
+		System.out.println("       ....End Read The File Method!\n");
+		return vct;
+	}
+	
 	/**
 	 * 'readTheFile' method reads a file line by line and stores each line as a
 	 * String Vector element. Then it returns the String Vector(The first file

@@ -13,7 +13,7 @@ noise. A dedicated functionality displays noise in the data graphically, to
 enable data visual inspection and quality control. The software also allows 
 constructing long read-fragments from pairs of reads with overlapping 3'-ends.
 
-Leucippus Four Tasks
+Leucippus Five Tasks
 =====================
  a.  Constructs long reads
         -construction of long read by sliding paired reads and then choosing
@@ -36,7 +36,8 @@ Leucippus Four Tasks
  
  d.  Making decision about provided sites, whether they are mosaics.
 
-
+ e.  Create pvalue or mutation rate graphs for a particular site, by reading
+	noise table files
 
 1. Compilation
 ==============
@@ -80,6 +81,8 @@ associated with a particular task:
  b.  'noisetab' => Creates noise tables for sites of interest.
  c.  'graph'    => Creates graphs from noise tables.
  d.  'decide'   => Makes decision whether sites of interest are mosaics.
+ e.  'posgraph' => Creates position graphs from noise tables.
+
 
 Cut offs at each step:
 
@@ -94,13 +97,16 @@ distance from interval boundaries [-1]
 
 c. 'graph'
 min coverage [100]
-max range [0.05]
+max range [0.005]
 
 d. 'decide'
 min germline AF [0.35]
 min coverage [100]
 max p-value [0.05]
 
+e. 'posgraph'
+min coverage [100]
+max range [0.005]
 
 A. Command 'frag'
 -----------------
@@ -249,27 +255,31 @@ where
  y         is the distance from the RIGHT of the targeted interval
  Nuc_ref   is the reference nucleotide for this position
  Nuc_exp   is the expected nucleotide (only different from Nuc_ref at
-           position for the sites of interest)
- tot       is the coverage of the position by bases passing all cut offs
-           (excluding reads that contain a deletion at this position)
+            position for the sites of interest)
+ tot       is the total number of by good bases (i.e., passign base quality
+ 	    and padding cutoffs) at this position
+            tot = #A + #C + #T + #G + #Ds, where D represents deletion
  As        is the coverage by As passing all cut-offs
  Cs        is the coverage by Cs passing all cut-offs
  Ts        is the coverage by Ts passing all cut-offs
  Gs        is the coverage by Gs passing all cut-offs
 
  Noise tables also contain detailed information about mutations, 
-deletions (start, length), and insertions(start, length, and sequence) 
+deletions (start, length), and insertions (start, length, and sequence) 
 of all positions in intervals of targeted site.
 Example of additional columns:  
-Ds	Ps	D1	D2	... D10	I1	I2... I10  DelInfo	InsInfo
-0	0	1	0 	... 0	0	0 ... 0	    0_1D_5627738_1, 0
-1	0	0	0 	... 0	0	0 ... 0	    0	            0
-0	0	0	0 	... 0	0	0 ... 0	    0	            0
-0	0	0	0 	... 0	0	0 ... 0     0	            0
-0	0	0	0 	... 0	0	0 ... 0	    0	            0
+Ds	Ps	cov	D1	D2... D10   I1  I2... I10  DelInfo	InsInfo
+0	0	8053	2	0 ... 0	    0	1 ... 0	    C,C         TA,
+2	0	8053	0	0 ... 0	    2	0 ... 0	    0	        A,A
+0	0	8053	0	0 ... 0	    0	0 ... 0	    0	        0
+0	0	8053	0	0 ... 0	    0	0 ... 0     0	        0
+0	0	8053	0	0 ... 0	    0	0 ... 0	    0	        0
 
 where 
 Ds      is the count of deletions found for this position
+Ps	is the count of Ps when padding has been applied
+cov     is the total number of reads covering the base; this is used for
+	 calculation of indel allele frequency
 D1      is the count of reads with one base deletion starting at next position
 D2      is the count of reads with two base deletion starting at next position
 ...
@@ -344,7 +354,7 @@ Leucippus graph [options] -o <prefix> table1.file [table2.file]
 
  Options:    -type            graph type: pvalue|mutrate [pvalue]
              -coverage        minimum site/position coverage [100]
-             -range    DOUBLE maximum range for error [0.05]
+             -range    DOUBLE maximum range for error [0.005]
              -overlap  INT    use positions in overlapping 3'-ends of reads.
                               The number specifies read length. Only useful 
 			      for analysis of amplicon-seq data
@@ -457,7 +467,45 @@ java Leucippus decide \
      -o pathtoresults/resultstable.tsv \
      pathtoinput/noisetable.tsv
 
-E. Command 'extract'
+E. Command 'posgraph'
+--------------------
+
+Leucippus can create graphs for visualizing  nucleotide substitution rates 
+and p-values for a site-position or any other position present in multiple noise 
+tables. The position graph depicts the behaviour of Allele Frequency of the site
+alternative nucleotide found in noise tables. Sinse the site alternative 
+nucleotide can be more than one, the posgraph command generates three lines for 
+all possible substitutions. For example if the reference in site-position under 
+investigation is A, then posgraph (with -type p-value command) will generate 
+three pvalue lines for substitutions A to T, A to C, and A to G. Each one of 
+the three lines in the plot has different color. The color information is 
+provided with the x-title.
+
+
+Usage: Leucippus posgraph [options] -o <prefix> [table1 table2 .... table(n)]
+
+Options:    -type             graph type: pvalue|mutrate [pvalue]
+            -pos              chr(x):position (1-22, X, Y) [chr1:1000000]
+            -coverage INT     minimum site/position coverage [100]
+            -range    DOUBLE  maximum range for error [0.05]
+            -overlap  INT     use positions in overlapping 3'-ends of reads
+                               (the number specifies read length and it is
+                               only useful for analysis of amplicon-seq data)
+            -o                prefix for output files: prefix.pdf
+
+Example:
+
+Example of posgraph command
+java Leucippus posgraph \
+     -type pvalue \
+     -pos 4:153253817 \
+     -cfR /pathtoRscript/Rscript \
+     -coverage 200 \
+     -range 0.05 \
+     -o pathtooutput/outposgraph \
+     pathtoinput/noisetable1.tsv pathtoinput/noisetable2.tsv ...
+
+F. Command 'extract'
 --------------------
 Leucippus provides 'extract' command for read retrieval from bam files. User
 have to specify position and nucleotide in question. The returned reads will
@@ -477,6 +525,8 @@ java Leucippus extract \
      -a T \
      -p chr15:34563 \
      /pathtobam/file.bam
+
+
 
 3. Configuration
 ================
