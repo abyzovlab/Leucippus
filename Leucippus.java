@@ -5,6 +5,14 @@
  * @version 1.0 Build 08/06/2015.
  * Description : Software for Noise Estimation
  */
+// 11/23/2016
+//
+// 07/16/2017 : add checking if output file exists then either display error message
+//              or change output name to name with new latest version identifier.
+//		frags, noisetab, graphs, decision, extract,
+// 07/16/2017
+//
+
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -35,6 +43,7 @@ import java.util.HashSet;
 import java.util.Set;
 public class Leucippus
 {
+	private static boolean firstdontmatch;
 	private static String[][] noisetable = new String[0][0];
 	private static int[][] totalbasecounts = new int[0][0];
 // 	Two dimensional String array used to hold table results
@@ -62,9 +71,9 @@ public class Leucippus
 
 	private static Vector<String> initprstrsends = new Vector<String> ();
 // 	Vector that was generated to hold initial site intervals
-//	It is used in make tables process and assists when distance filter is applied
+//	It is used in make-tables process and assists when distance filter is applied
 //  By storing the original intervals in this parallel Vector(with this of merged)
-//  all reads that have to high distance from all initial start points and end points are discarted
+//  all reads that have too high distance from all initial start points and end points are discarted
 //  (the start and end points of the read are checked in all corresponding initial intervals)
 //	if all checks discard the read then the read is discarded.
 
@@ -109,28 +118,35 @@ public class Leucippus
 				+ "Input:   file1.fq.gz     input gzipped file with reads in fastq format\n"
 				+ "                         (if not provided, input is taken from standard input)\n"
 				+ "         file2.fq.gz     input gzipped file with reads in fastq format\n";
-
+//		String tableinfo = "\nUsage: Leucippus noisetab [options] file1.bam [file2.bam, ...]\n\n"
+//				+ "Options:     -interval FILE  file with intervals\n"
+//				+ "             -ref      FILE  FASTA file with reference sequence (could be .gz file)\n"
+//				+ "             -o        FILE  output file\n"
+//				+ "             -q              base quality cut off 0-100 [20]\n"
+//				+ "             -pad            padding range at read ends [1]\n"
+//				+ "             -d              distance cut off [-1]\n\n";
+//				//+ "             -j              java version 1.7 or 1.8 [1.7]\n\n"; java version is retrieved internally
 		String tableinfo = "\nUsage: Leucippus noisetab [options] file1.bam [file2.bam, ...]\n\n"
 				+ "Options:     -interval FILE  file with intervals\n"
 				+ "             -ref      FILE  FASTA file with reference sequence (could be .gz file)\n"
 				+ "             -o        FILE  output file\n"
 				+ "             -q              base quality cut off 0-100 [20]\n"
 				+ "             -pad            padding range at read ends [1]\n"
-				+ "             -d              distance cut off [-1]\n\n";
-				//+ "             -j              java version 1.7 or 1.8 [1.7]\n\n"; java version is retrieved internally
-
+				+ "             -d              distance cut off [-1]\n"
+				+ "             -msmct          exclude all reads above mismatch cutoff [-1]\n\n";
+			
+//+ "             -j              java version 1.7 or 1.8 [1.7]\n\n"; java version is retrieved internally
 		String graphinfo = "\nUsage: Leucippus graph [options] -o <prefix> table1.file [table2.file]\n\n"
 				+ "Options:    -type             graph type: pvalue|mutrate [pvalue]\n"
 				+ "	    -coverage INT     minimum site/position coverage [100]\n"
 				+ "            -range    DOUBLE  maximum range for error [0.005]\n"
 				+ "            -overlap  INT     use positions in overlapping 3'-ends of reads\n"
 				+ "                                (the number specifies read length and it is\n"
-				+ "                                 only useful for analysis of amplicon-seq data)\n\n"
+				+ "                                 only useful for analysis of amplicon-seq data)\n"
+				+ "            -cfR      PATH    /pathtoRscript/Rscript   (required)\n"
 //				+ "            -fpval           generate frequency p-value table\n"
 				+ "            -o               prefix for output files: prefix.pdf\n\n";
 //				+ "                                                      prefix.fpvtb[1,2].tsv\n\n";
-
-
 
 //	May 19 2016
 //	Java Leucipus posgraph -pos chr4:153253817 [table1 table2 table3 ...]
@@ -144,6 +160,7 @@ public class Leucippus
 				+ "            -overlap  INT     use positions in overlapping 3'-ends of reads\n"
 				+ "                               (the number specifies read length and it is\n"
 				+ "                               only useful for analysis of amplicon-seq data)\n"
+				+ "            -cfR      PATH    /pathtoRscript/Rscript   (required)\n"
 //				+ "            -fpval           generate frequency p-value table\n"
 				+ "            -o                prefix for output files: prefix.pdf\n\n";
 //				+ "                                                      	prefix.fpvtb[	1,2].tsv\n\n";
@@ -173,7 +190,8 @@ public class Leucippus
 
 // 		final argument arrays (START)
 		String[][] OverlapArgs = new String[8][2]; // frag
-		String[][] TablesArgs =  new String[7][2]; // noisetab
+		//String[][] TablesArgs =  new String[7][2]; // noisetab
+		String[][] TablesArgs =  new String[8][2]; // noisetab
 		String[][] GraphsArgs =  new String[6][2]; // graph
 		String[][] DecideArgs =  new String[5][2]; // decide
 		String[][] ExtractArgs = new String[4][2]; // extract
@@ -299,7 +317,7 @@ public class Leucippus
 		fragout = "", shortread1out="", shortread2out="", shrts1c2out="", grorpvtb = "", 
 		lrleng = "", separator="", gref_pth = "", pad="", 
 		intable = "", outdecide = "", coverages = "", germlineAFs = "", pvalues="", 
-		prmrs_pth = "", fragpipenp = "", minvrlps="", tables_path = "", 
+		prmrs_pth = "", fragpipenp = "", minvrlps="", tables_path = "", msmcut="", 
 		graphs_path = "", graph_type = "", graphs_overlap = "", graphs_range="", dcut = "",
 		outextract="", bamsextract="", positionextract="", alellextract="",
 		ptables_pre_path="", tempptable_path = "", pgraphs_path = "", pgraph_type = "", 
@@ -307,7 +325,7 @@ public class Leucippus
 		tmptbpth="", tempostblnm="";
 		File fl;
 		double pvalued=0.0;
-		int k = 1, p = 0, dcuti = 500;
+		int k = 1, p = 0, dcuti = 500, msmcuti=-1;
 		int lrlengi = 0, minvrlpi=0;
 
 //		Get java version
@@ -496,6 +514,8 @@ public class Leucippus
 				prmrs_pth = TablesArgs[1][1];
 				gref_pth = TablesArgs[5][1];
 				pad=TablesArgs[6][1];
+				msmcut=TablesArgs[7][1];
+				msmcuti = Integer.parseInt(msmcut);
 				//jversion=TablesArgs[7][1];
 				// prrfsqv = GenomeRefParser(prmrs_pth, gref_pth);
 				System.out.println("Request Genome reference sequences!");
@@ -529,7 +549,7 @@ public class Leucippus
 				 */
 				System.out.println("main method 2 Proceed with Table!");
 				makeTables(bsh_pth, smtls_pth, input, output, perc, prrfsqv,
-						bms, tmppath, dcuti, pad, jv);
+						bms, tmppath, dcuti, pad, jv, msmcuti);
 				k = 0;
 			}
 // 			noisetab (END)
@@ -868,11 +888,11 @@ public class Leucippus
 					rscrp_path = argmns[i + 1];
 					resargs[4][1] = rscrp_path;
 					corcnt = corcnt + 1;
-					System.out.println("R executable exists!");
+					System.out.println("Rscript executable exists!");
 				}
 				else
 				{
-					System.out.println("R executable not found.\nExit.");
+					System.out.println("Rscript executable not found.\nExit.");
 					Exit();
 				}
 
@@ -1187,12 +1207,16 @@ public class Leucippus
 			resargs[4][1] = "bin/bash";
 		}
 
-		System.out.println("-------ArgsConfigCheck method End.\n");
+		System.out.println("-------ArgsConfigCheckBack02 method End.\n");
 		return resargs;
-	      // ArgsConfigCheck method (END)
+	      // ArgsConfigCheckBack02 method (END)
 
 	}
 
+
+
+
+// Test arguments for frag
 	// test frag(START)
 	/**
 	 * Method that checks for validity of user entered arguments. The method
@@ -1211,9 +1235,10 @@ public class Leucippus
 	 * @return
 	 * @throws IOException
 	 */
-	public static String[][] testArgsforFragsBackres(String[] argmns)
-			throws IOException {
 
+	public static String[][] testArgsforFrags(String[] argmns)
+			throws IOException
+	{
 		System.out.println("Start of testArgsforFrags method!");
 		String fragsinfo = "\nUsage: Leucippus frag -o ofile [options] [ file1.fq.gz file2.fq.gz ]\n\n"
 				+ "Options: -o  FILE        output file in gzip (e.g., longreads.fq.gz)\n"
@@ -1224,411 +1249,39 @@ public class Leucippus
 				+ "Input:   file1.fq.gz     input gzipped file with reads in fastq format\n"
 				+ "                         (if not provided, input is taken from standard input)\n"
 				+ "         file2.fq.gz     input gzipped file with reads in fastq format\n";
+//		Common Variables
+		// cumulative informative variables
+		// cumulative correct report, cummulative missing report, 
+		// cummulative general(correct-missing) report for 	
+		String correct_report = "", missed_report = "", general_report="";
+		// current parent, input, and file paths
+		String parent_path = "", input_path = "", file_path = ""; 
+		String cur_correct_inf = "", cur_error_inf=""; // current added to cumulative
+		File output_file, input_file;
+		String cur_flname="";
 
-
+//		Local Variables		
+		String longread_out_path="", shortread1_out_path="", shortread2_out_path="";
+		Vector<String> infiles = new Vector<String>();
 		boolean missinparrd12out = false;
 		int corcnt = 0;
-		String root_pth = "", inpth = "", flpth = "";
 
 		String maxlrleg = "";
 		int maxlrlegi = 0;
 		double db = 0.0;
-
-		String ftnm = "";
-		String correct_report = "", missed_report = "";
-		String cucrinf = "", cumsinf = "";
-		File outfl, inpfl;
-		String lread = "", rread = "", longread = "", shortread1="", shortread2="";
+		
 		// test for pipe
 		int pibal = 0;
 		String minovs = "";
 		int minovi=0;
-
-		String[][] resargs = new String[7][2];
-		resargs[0][0] = "pipeornot";
-		resargs[1][0] = "input";
-		resargs[2][0] = "output";
-		resargs[3][0] = "outputread1path";
-		resargs[4][0] = "outputread2path";
-		resargs[5][0] = "longreadmaxlength";
-		resargs[5][1] = "500";
-		resargs[6][0] = "minoveralpdef";
-		resargs[6][1] = "50";
 		// default value for long max length = 500
-		Vector<String> infiles = new Vector<String>();
+		
 		String cur = "", jcur = "", inflss = "";
 
 		String drct = "", testvalue = "";
-		if ((argmns[argmns.length - 2].equals("-o"))
-				|| (argmns[argmns.length - 2].equals("-o1"))
-				|| (argmns[argmns.length - 2].equals("-o2"))
-				|| (argmns[argmns.length - 2].equals("-l"))
-				|| (argmns[argmns.length - 2].equals("-minov")))
-			drct = "pipe";
-		else
-			drct = "not_pipe";
-		System.out.println(drct);
-// 		Test for input file(s) existence.
-		if (drct.equals("not_pipe")) {
-			for (int j = argmns.length - 1; j > 0; j--) {
-				if (!(argmns[j - 1].charAt(0) == '-')) {
-					jcur = argmns[j];
-					inpfl = new File(jcur);
-					inpth = inpfl.getName();
-					System.out.println(inpth);
-					if (jcur.equals(inpth)) {
-						root_pth = new java.io.File(".").getCanonicalPath();
-						root_pth = root_pth + "/";
-						jcur = root_pth + jcur;
-					}
-					if (testFileExistence(jcur)) {
-						infiles.add(jcur);
-						System.out.println("input file exists : " + jcur);
-					} else {
-						System.out.println("input file not found : " + jcur
-								+ "\nExit.");
-						Exit();
-					}
-				} else
-					j = 0;
-			}
-		}
-
-// 		Test(END) for input file(s) existence.
-		if (infiles.size() == 1) {
-			System.out.println("One fastq file as input!");
-			resargs[1][0] = "InOnefastq";
-		}
-		if (infiles.size() == 2) {
-			System.out.println("Two fastq files as input!");
-			resargs[1][0] = "InTwofastq";
-		}
-		if (infiles.size() > 2) {
-			System.out
-					.println("More than two valid files as an input found. Exit.");
-			Exit();
-		}
-		String testq = "";
-		int infcnt = 0;
-		for (int u = 0; u < infiles.size(); u++) {
-			infcnt = 0;
-			testq = infiles.get(u);
-			for (int uj = 0; uj < infiles.size(); uj++) {
-				if (testq.equals(infiles.get(uj)))
-					infcnt = infcnt + 1;
-				if (infcnt > 1) {
-					System.out
-							.println("input file was typed two times in " +
-							"arguments.\nExit.");
-					Exit();
-				}
-			}
-			// System.out.println(infiles.get(u));
-		}
-
-		for (int i = 0; i < argmns.length; i++) {
-// 		Test for outputs file root directory existence.
-			if (argmns[i].equals("-o")) {
-				if (i < argmns.length - 1) {
-					longread = argmns[i + 1];
-					outfl = new File(longread);
-					ftnm = outfl.getName();
-					if (longread.equals(ftnm)) {
-						root_pth = new java.io.File(".").getCanonicalPath();
-						root_pth = root_pth + "/";
-						flpth = root_pth + ftnm;
-						resargs[2][0] = "outputpath";
-						resargs[2][1] = flpth;
-						corcnt = corcnt + 1;
-						cucrinf = "Output is OK!";
-						correct_report = correct_report + cucrinf + "\n";
-						System.out.println("Output is OK!");
-						//if (pibal == 1)
-						//	resargs[3][1] = flpth;
-
-					} else if (!(longread.equals(ftnm))) {
-						if (testParentDirectoryExistence(argmns[i + 1])) {
-							resargs[2][0] = "outputpath";
-							longread = argmns[i + 1];
-							resargs[2][1] = longread;
-							corcnt = corcnt + 1;
-							cucrinf = "Output is OK!";
-							correct_report = correct_report + cucrinf + "\n";
-							System.out.println("Output is OK!");
-						//	if (pibal == 1)
-						//		resargs[3][1] = longread;
-
-						} else {
-							cumsinf = "Output root folder not found.";
-				
-							missed_report = missed_report + cumsinf + "\n";
-							// System.out.println("Output root folder not found.");
-						}
-					}
-				}
-			}
-
-			if (argmns[i].equals("-o1")) {
-				if (i < argmns.length - 1) {
-					shortread1 = argmns[i + 1];
-					outfl = new File(shortread1);
-					ftnm = outfl.getName();
-					if (shortread1.equals(ftnm)) {
-						root_pth = new java.io.File(".").getCanonicalPath();
-						root_pth = root_pth + "/";
-						flpth = root_pth + ftnm;
-						resargs[3][0] = "outputRead1Path";
-						resargs[3][1] = flpth;
-						corcnt = corcnt + 1;
-						cucrinf = "OutputRead1Path is OK!";
-						correct_report = correct_report + cucrinf + "\n";
-						System.out.println(cucrinf);
-					//	if (pibal == 1)
-					//		resargs[3][1] = flpth;
-
-					} else if (!(shortread1.equals(ftnm))) {
-						if (testParentDirectoryExistence(argmns[i + 1])) {
-							resargs[3][0] = "outputRead1Path";
-							shortread1 = argmns[i + 1];
-							resargs[3][1] = shortread1;
-							corcnt = corcnt + 1;
-							cucrinf = "OutputRead1Path is OK!";
-							correct_report = correct_report + cucrinf + "\n";
-							System.out.println(cucrinf);
-					//		if (pibal == 1)
-					//			resargs[3][1] = shoread1;
-
-						} else {
-							cumsinf = "Output read1-root folder not found.";
-							missed_report = missed_report + cumsinf + "\n";
-							missinparrd12out=true;
-						// System.out.println("Output root folder not found.");
-						}
-					}
-				}
-			}
-
-			if (argmns[i].equals("-o2")) {
-				if (i < argmns.length - 1) {
-					shortread2 = argmns[i + 1];
-					outfl = new File(shortread2);
-					ftnm = outfl.getName();
-					if (shortread2.equals(ftnm)) {
-						root_pth = new java.io.File(".").getCanonicalPath();
-						root_pth = root_pth + "/";
-						flpth = root_pth + ftnm;
-						resargs[4][0] = "outputRead2Path";
-						resargs[4][1] = flpth;
-						corcnt = corcnt + 1;
-						cucrinf = "OutputRead2Path is OK!";
-						correct_report = correct_report + cucrinf + "\n";
-						System.out.println(cucrinf);
-					//	if (pibal == 1)
-					//		resargs[3][1] = flpth;
-
-					} else if (!(shortread2.equals(ftnm))) {
-						if (testParentDirectoryExistence(argmns[i + 1])) {
-							resargs[4][0] = "outputRead2Path";
-							shortread2 = argmns[i + 1];
-							resargs[4][1] = shortread2;
-							corcnt = corcnt + 1;
-							cucrinf = "OutputRead2Path is OK!";
-							correct_report = correct_report + cucrinf + "\n";
-							System.out.println(cucrinf);
-					//		if (pibal == 1)
-					//			resargs[3][1] = shoread2;
-
-						} else {
-							cumsinf = "Output read2-root folder not found.";
-							missed_report = missed_report + cumsinf + "\n";
-							missinparrd12out=true;
-						// System.out.println("Output root folder not found.");
-						}
-					}
-				}
-			}
-
-			if (argmns[i].equals("-l")) {
-				if (i < argmns.length - 1) {
-					maxlrleg = argmns[i + 1];
-					if (isNumeric(maxlrleg)) {
-						db = Double.parseDouble(maxlrleg);
-						db = Math.ceil(db);
-						maxlrlegi = (int) db;
-						if (maxlrlegi > 3) {
-							cumsinf = "Maximum long read length OK!";
-							resargs[5][1] = Integer.toString(maxlrlegi);
-							corcnt = corcnt + 1;
-						} else {
-							System.out
-									.println("Maximum long read length too " +
-									"small.");
-							Exit();
-						}
-					} else {
-						System.out
-								.println("Maximum long read length Not " + 
-								"Numeric.");
-						Exit();
-					}
-
-				} else {
-					System.out.println("Maximum long read length is missing.");
-					Exit();
-				}
-			}
-
-			if (argmns[i].equals("-minov")) {
-				if (i < argmns.length - 1) {
-					minovs = argmns[i + 1];
-					if (isNumeric(minovs)) {
-						db = Double.parseDouble(minovs);
-						db = Math.ceil(db);
-						minovi = (int) db;
-						if (minovi > 2) {
-							cumsinf = "Minimum overlapping region is OK!";
-							resargs[6][0] = "minoverlap";
-							resargs[6][1] = Integer.toString(minovi);
-							corcnt = corcnt + 1;
-						} else {
-							System.out
-									.println("Minimum overlapping region is too " +
-									"small.\nExit.");
-							Exit();
-						}
-					} else {
-						System.out
-								.println("Minimum overlapping region is Not " + 
-								"Numeric.\nExit.");
-						Exit();
-					}
-
-				} else {
-					System.out.println("Minimum overlapping region error.\nExit.");
-					Exit();
-				}
-			}
-		}
-
-		System.out.println(missed_report);
-
-//		if( !( resargs[3][1].isEmpty()) && !( resargs[4][1].isEmpty()) )
-		if( ( (resargs[3][1]==null) && (resargs[4][1]!=null) ) || ( (resargs[3][1]!=null) && (resargs[4][1]==null) ) )
-		{		
-			System.out.println("Both output for failed to overlap reads are required\n when optional '-o1' and '-o2' are used.\nOne output for failed to overlap reads is missing\nExit.");
-			Exit();
-		}
-
-
-		if( (resargs[3][1]!=null) && (resargs[4][1]!=null) )		
-		{
-			if( resargs[3][1].equals(resargs[4][1]))
-			{
-				System.out.println("outputs for failed to overlap reads are same.\nExit.");
-				Exit();
-			}
-			if( ( resargs[2][1].equals(resargs[3][1])) || ( resargs[2][1].equals(resargs[4][1])) )
-			{
-				System.out.println("outputs for Long reads and failed to overlap reads are same.\nExit.");
-				Exit();
-			}
-		}
-		//for (int i=2; i<5; i++)
-		//	System.out.println(resargs[i][1]);
-		// System.out.println("before exit");
-		if(missinparrd12out==true)
-			Exit();
-		// for(int i=0; i<infiles.size(); i++)
-		// {
-		// if(i<infiles.size()-1)
-		// inflss=inflss + infiles.get(i) + ",";
-		// if(i==infiles.size()-1)
-		// inflss=inflss + infiles.get(i);
-		// }
-
-		if (infiles.size() > 1) {
-			for (int i = infiles.size() - 1; i > -1; i--) {
-				if (i > 0)
-					inflss = inflss + infiles.get(i) + ",";
-				if (i == 0)
-					inflss = inflss + infiles.get(i);
-			}
-		}
-
-		// Error fixed on 05/14/2015
-		// if only one fastq file was as an input the path was missed
-		// fixed with the following if statement
-		if (infiles.size() == 1)
-			inflss = inflss + infiles.get(0);
-
-		File tszpd;
-		if (infiles.size() > 0) {
-			tszpd = new File(infiles.get(0));
-			if (isFileGZipped(tszpd)) {
-				// resargs[1][0] = "leftrightreaddfqgz";
-				resargs[0][1] = "notpipe_gz";
-			}
-			if (!(isFileGZipped(tszpd))) {
-				// resargs[1][0] = "leftrightreaddfqgz";
-				resargs[0][1] = "notpipe";
-			}
-		}
-		// Test if the input file is a bam file that contains left and right
-		// read (needs implementation)
-		if (infiles.size() < 1) {
-			resargs[1][0] = "bamfile";
-			resargs[0][1] = "pipe";
-			System.out.println("Piped bam file expected.");
-			// resargs[1][1] = "none";
-		}
-
-		if (infiles.size() > 0) // string >0
-		{
-			resargs[1][1] = inflss;
-		}
-		System.out.println("End of testArgsforFrags method!");
-
-		return resargs;
-	}
-	//test frag (END)
-
-	public static String[][] testArgsforFrags(String[] argmns)
-			throws IOException {
-
-		System.out.println("Start of testArgsforFrags method!");
-		String fragsinfo = "\nUsage: Leucippus frag -o ofile [options] [ file1.fq.gz file2.fq.gz ]\n\n"
-				+ "Options: -o  FILE        output file in gzip (e.g., longreads.fq.gz)\n"
-                                + "         -o1 FILE        output file in gzip (e.g., remainedreads1.fq.gz)\n"
-                                + "         -o2 FILE        output file in gzip (e.g., remainedreads2.fq.gz)\n"
-                                + "         -l              maximum long reads length [500]\n"
-                                + "         -minov          minimum overlapping region [50]\n"
-				+ "Input:   file1.fq.gz     input gzipped file with reads in fastq format\n"
-				+ "                         (if not provided, input is taken from standard input)\n"
-				+ "         file2.fq.gz     input gzipped file with reads in fastq format\n";
-
-
-		boolean missinparrd12out = false;
-		int corcnt = 0;
-		String root_pth = "", inpth = "", flpth = "";
-
-		String maxlrleg = "";
-		int maxlrlegi = 0;
-		double db = 0.0;
-
-		String ftnm = "";
-		
-		// cumulative
-		String correct_report = "", missed_report = "", general_report=""; 
-		
-		// cumulative correct report, missing report, general report for 
-		// informative variables
-		String cucrinf = "", cumsinf = ""; // current added to cumulative
-		File outfl, inpfl;
-		String lread = "", rread = "", longread = "", shortread1="", shortread2="";
-		// test for pipe
-		int pibal = 0;
-		String minovs = "";
-		int minovi=0;
+		System.out.println(argmns.length);
+		// int argindex = 0;
+		int actualargsize = 0;
 
 		String[][] resargs = new String[7][2];
 		resargs[0][0] = "pipeornot";
@@ -1640,24 +1293,18 @@ public class Leucippus
 		resargs[5][1] = "500";
 		resargs[6][0] = "minoveralpdef";
 		resargs[6][1] = "50";
-		// default value for long max length = 500
-		Vector<String> infiles = new Vector<String>();
-		String cur = "", jcur = "", inflss = "";
 
-		String drct = "", testvalue = "";
-		System.out.println(argmns.length);
-		// int argindex = 0;
-		int actualargsize = 0;
 		for (int i=0; i<argmns.length; i++)
 		{
 		    if (argmns[i]==null)
 		    {
 		        actualargsize=i; 
 // ( the size is always 1 + last index, and last index = size -1)
-		        break;    
+		        break;
 		    }
 			actualargsize=i; 
 		}
+
 		if(actualargsize!=0)
 		{
 //		    if ((argmns[argmns.length - 2].equals("-o"))
@@ -1690,13 +1337,13 @@ public class Leucippus
 				{
 				if (!(argmns[j - 1].charAt(0) == '-')) {
 					jcur = argmns[j];
-					inpfl = new File(jcur);
-					inpth = inpfl.getName();
-					System.out.println(inpth);
-					if (jcur.equals(inpth)) {
-						root_pth = new java.io.File(".").getCanonicalPath();
-						root_pth = root_pth + "/";
-						jcur = root_pth + jcur;
+					input_file = new File(jcur);
+					input_path = input_file.getName();
+					System.out.println(input_path);
+					if (jcur.equals(input_path)) {
+						parent_path = new java.io.File(".").getCanonicalPath();
+						parent_path = parent_path + "/";
+						jcur = parent_path + jcur;
 					}
 					if (testFileExistence(jcur)) {
 						infiles.add(jcur);
@@ -1771,38 +1418,67 @@ public class Leucippus
 // 		Test for outputs file root directory existence.
 			if (argmns[i].equals("-o")) {
 				if (i < argmns.length - 1) {
-					longread = argmns[i + 1];
-					outfl = new File(longread);
-					ftnm = outfl.getName();
-					if (longread.equals(ftnm)) {
-						root_pth = new java.io.File(".").getCanonicalPath();
-						root_pth = root_pth + "/";
-						flpth = root_pth + ftnm;
-						resargs[2][0] = "outputpath";
-						resargs[2][1] = flpth;
-						corcnt = corcnt + 1;
-						cucrinf = "Output is OK!";
-						correct_report = correct_report + cucrinf + "\n";
-						System.out.println("Output is OK!");
-						//if (pibal == 1)
-						//	resargs[3][1] = flpth;
-
-					} else if (!(longread.equals(ftnm))) {
-						if (testParentDirectoryExistence(argmns[i + 1])) {
+					longread_out_path = argmns[i + 1];
+					output_file = new File(longread_out_path);
+					cur_flname = output_file.getName();
+					if (longread_out_path.equals(cur_flname)) {
+						if(!(testFileExistence(longread_out_path)))
+						{
+							parent_path = new java.io.File(".").getCanonicalPath();
+							parent_path = parent_path + "/";
+							file_path = parent_path + cur_flname;
 							resargs[2][0] = "outputpath";
-							longread = argmns[i + 1];
-							resargs[2][1] = longread;
+							resargs[2][1] = file_path;
 							corcnt = corcnt + 1;
-							cucrinf = "Output is OK!";
-							correct_report = correct_report + cucrinf + "\n";
+							cur_correct_inf = "Output is OK!";
+							correct_report = correct_report + cur_correct_inf + "\n";
 							System.out.println("Output is OK!");
-						//	if (pibal == 1)
-						//		resargs[3][1] = longread;
+							//if (pibal == 1)
+							//	resargs[3][1] = file_path;
+						}
+						else
+						{
+							cur_error_inf = "Output file for long reads allready exists.\n" +
+								" " + longread_out_path + "\n" +
+								"  please remove existing output file(s) or\n"+
+								"  change the output file name.";
+							missed_report = missed_report + cur_error_inf + "\n";
+							//donotproceed=true;
+							//reason=reason+cur_error_inf+"\n";
+						}
 
-						} else {
-							cumsinf = "Output root folder not found.";
+
+					} else if (!(longread_out_path.equals(cur_flname))) {
+						if (testParentDirectoryExistence(argmns[i + 1])) 
+						{
+							if(!(testFileExistence(longread_out_path)))
+							{
+								resargs[2][0] = "outputpath";
+								longread_out_path = argmns[i + 1];
+								resargs[2][1] = longread_out_path;
+								corcnt = corcnt + 1;
+								cur_correct_inf = "Output is OK!";
+								correct_report = correct_report + cur_correct_inf + "\n";
+								System.out.println("Output is OK!");
+						//	if (pibal == 1)
+						//		resargs[3][1] = longread_out_path;
+							}
+							else
+							{
+								cur_error_inf = "Output file for long reads allready exists.\n" +
+								" " + longread_out_path + "\n" +
+								"  please remove existing output file(s) or\n"+
+								"  change the output file name.";
+								missed_report = missed_report + cur_error_inf + "\n";
+								//donotproceed=true;
+								//reason=reason+cur_error_inf+"\n";
+							}
+						} 
+						else 
+						{
+							cur_error_inf = "Output root folder not found.";
 				
-							missed_report = missed_report + cumsinf + "\n";
+							missed_report = missed_report + cur_error_inf + "\n";
 							// System.out.println("Output root folder not found.");
 						}
 					}
@@ -1811,37 +1487,37 @@ public class Leucippus
 
 			if (argmns[i].equals("-o1")) {
 				if (i < argmns.length - 1) {
-					shortread1 = argmns[i + 1];
-					outfl = new File(shortread1);
-					ftnm = outfl.getName();
-					if (shortread1.equals(ftnm)) {
-						root_pth = new java.io.File(".").getCanonicalPath();
-						root_pth = root_pth + "/";
-						flpth = root_pth + ftnm;
+					shortread1_out_path = argmns[i + 1];
+					output_file = new File(shortread1_out_path);
+					cur_flname = output_file.getName();
+					if (shortread1_out_path.equals(cur_flname)) {
+						parent_path = new java.io.File(".").getCanonicalPath();
+						parent_path = parent_path + "/";
+						file_path = parent_path + cur_flname;
 						resargs[3][0] = "outputRead1Path";
-						resargs[3][1] = flpth;
+						resargs[3][1] = file_path;
 						corcnt = corcnt + 1;
-						cucrinf = "OutputRead1Path is OK!";
-						correct_report = correct_report + cucrinf + "\n";
-						System.out.println(cucrinf);
+						cur_correct_inf = "OutputRead1Path is OK!";
+						correct_report = correct_report + cur_correct_inf + "\n";
+						System.out.println(cur_correct_inf);
 					//	if (pibal == 1)
-					//		resargs[3][1] = flpth;
+					//		resargs[3][1] = file_path;
 
-					} else if (!(shortread1.equals(ftnm))) {
+					} else if (!(shortread1_out_path.equals(cur_flname))) {
 						if (testParentDirectoryExistence(argmns[i + 1])) {
 							resargs[3][0] = "outputRead1Path";
-							shortread1 = argmns[i + 1];
-							resargs[3][1] = shortread1;
+							shortread1_out_path = argmns[i + 1];
+							resargs[3][1] = shortread1_out_path;
 							corcnt = corcnt + 1;
-							cucrinf = "OutputRead1Path is OK!";
-							correct_report = correct_report + cucrinf + "\n";
-							System.out.println(cucrinf);
+							cur_correct_inf = "OutputRead1Path is OK!";
+							correct_report = correct_report + cur_correct_inf + "\n";
+							System.out.println(cur_correct_inf);
 					//		if (pibal == 1)
 					//			resargs[3][1] = shoread1;
 
 						} else {
-							cumsinf = "Output read1-root folder not found.";
-							missed_report = missed_report + cumsinf + "\n";
+							cur_error_inf = "Output read1-root folder not found.";
+							missed_report = missed_report + cur_error_inf + "\n";
 							missinparrd12out=true;
 						// System.out.println("Output root folder not found.");
 						}
@@ -1851,37 +1527,37 @@ public class Leucippus
 
 			if (argmns[i].equals("-o2")) {
 				if (i < argmns.length - 1) {
-					shortread2 = argmns[i + 1];
-					outfl = new File(shortread2);
-					ftnm = outfl.getName();
-					if (shortread2.equals(ftnm)) {
-						root_pth = new java.io.File(".").getCanonicalPath();
-						root_pth = root_pth + "/";
-						flpth = root_pth + ftnm;
+					shortread2_out_path = argmns[i + 1];
+					output_file = new File(shortread2_out_path);
+					cur_flname = output_file.getName();
+					if (shortread2_out_path.equals(cur_flname)) {
+						parent_path = new java.io.File(".").getCanonicalPath();
+						parent_path = parent_path + "/";
+						file_path = parent_path + cur_flname;
 						resargs[4][0] = "outputRead2Path";
-						resargs[4][1] = flpth;
+						resargs[4][1] = file_path;
 						corcnt = corcnt + 1;
-						cucrinf = "OutputRead2Path is OK!";
-						correct_report = correct_report + cucrinf + "\n";
-						System.out.println(cucrinf);
+						cur_correct_inf = "OutputRead2Path is OK!";
+						correct_report = correct_report + cur_correct_inf + "\n";
+						System.out.println(cur_correct_inf);
 					//	if (pibal == 1)
-					//		resargs[3][1] = flpth;
+					//		resargs[3][1] = file_path;
 
-					} else if (!(shortread2.equals(ftnm))) {
+					} else if (!(shortread2_out_path.equals(cur_flname))) {
 						if (testParentDirectoryExistence(argmns[i + 1])) {
 							resargs[4][0] = "outputRead2Path";
-							shortread2 = argmns[i + 1];
-							resargs[4][1] = shortread2;
+							shortread2_out_path = argmns[i + 1];
+							resargs[4][1] = shortread2_out_path;
 							corcnt = corcnt + 1;
-							cucrinf = "OutputRead2Path is OK!";
-							correct_report = correct_report + cucrinf + "\n";
-							System.out.println(cucrinf);
+							cur_correct_inf = "OutputRead2Path is OK!";
+							correct_report = correct_report + cur_correct_inf + "\n";
+							System.out.println(cur_correct_inf);
 					//		if (pibal == 1)
 					//			resargs[3][1] = shoread2;
 
 						} else {
-							cumsinf = "Output read2-root folder not found.";
-							missed_report = missed_report + cumsinf + "\n";
+							cur_error_inf = "Output read2-parent folder not found.";
+							missed_report = missed_report + cur_error_inf + "\n";
 							missinparrd12out=true;
 						// System.out.println("Output root folder not found.");
 						}
@@ -1897,7 +1573,8 @@ public class Leucippus
 						db = Math.ceil(db);
 						maxlrlegi = (int) db;
 						if (maxlrlegi > 3) {
-							cumsinf = "Maximum long read length OK!";
+							cur_correct_inf = "Maximum long read length OK!";
+							correct_report = correct_report + cur_correct_inf + "\n";
 							resargs[5][1] = Integer.toString(maxlrlegi);
 							corcnt = corcnt + 1;
 						} else {
@@ -1927,7 +1604,8 @@ public class Leucippus
 						db = Math.ceil(db);
 						minovi = (int) db;
 						if (minovi > 2) {
-							cumsinf = "Minimum overlapping region is OK!";
+							cur_correct_inf = "Minimum overlapping region is OK!";
+							correct_report = correct_report + cur_correct_inf + "\n";
 							resargs[6][0] = "minoverlap";
 							resargs[6][1] = Integer.toString(minovi);
 							corcnt = corcnt + 1;
@@ -2017,13 +1695,16 @@ public class Leucippus
 		}
 		// Test if the input file is a bam file that contains left and right
 		// read (needs implementation)
-		if (infiles.size() < 1) {
+
+		if (infiles.size() < 1)
+		{
 			resargs[1][0] = "bamfile";
 			resargs[0][1] = "pipe";
 			System.out.println("Piped bam file expected.");
 			// resargs[1][1] = "none";
 		}
-		if(resargs[2][1]==null) 		
+
+		if(resargs[2][1]==null)
 		{
 			System.out.println("output for long reads is missing.\nExit.");
 			Exit();
@@ -2037,237 +1718,11 @@ public class Leucippus
 
 		return resargs;
 	}
-	//test frag (END)
 
-
-
-
-
-	public static String[][] testArgsforFragsBack08(String[] argmns)
-			throws IOException {
-
-		System.out.println("Start of testArgsforFrags method!");
-		int corcnt = 0;
-		String root_pth = "", inpth = "", flpth = "";
-
-		String maxlrleg = "";
-		int maxlrlegi = 0;
-		double db = 0.0;
-
-		String ftnm = "";
-		String correct_report = "", missed_report = "";
-		String cucrinf = "", cumsinf = "";
-		File outfl, inpfl;
-		String lread = "", rread = "", longread = "";
-		// test for pipe
-		int pibal = 0;
-
-		String[][] resargs = new String[4][2];
-		resargs[0][0] = "pipeornot";
-		resargs[1][0] = "input";
-		resargs[2][0] = "output";
-		resargs[3][0] = "longreadmaxlength";
-		resargs[3][1] = "500";
-		// default value for long max length = 500
-
-		Vector<String> infiles = new Vector<String>();
-		String cur = "", jcur = "", inflss = "";
-
-		String drct = "", testvalue = "";
-		if ((argmns[argmns.length - 2].equals("-o"))
-				|| (argmns[argmns.length - 2].equals("-l")))
-			drct = "pipe";
-		else
-			drct = "not_pipe";
-		System.out.println(drct);
-
-		if (drct.equals("not_pipe")) {
-			for (int j = argmns.length - 1; j > 0; j--) {
-				if (!(argmns[j - 1].charAt(0) == '-')) {
-					jcur = argmns[j];
-					inpfl = new File(jcur);
-					inpth = inpfl.getName();
-					System.out.println(inpth);
-					if (jcur.equals(inpth)) {
-						root_pth = new java.io.File(".").getCanonicalPath();
-						root_pth = root_pth + "/";
-						jcur = root_pth + jcur;
-					}
-					if (testFileExistence(jcur)) {
-						infiles.add(jcur);
-						System.out.println("input file exists : " + jcur);
-					} else {
-						System.out.println("input file not found : " + jcur
-								+ "\nExit.");
-						Exit();
-					}
-				} else
-					j = 0;
-			}
-		}
-
-		if (infiles.size() == 1) {
-			System.out.println("One fastq file as input!");
-			resargs[1][0] = "InOnefastq";
-		}
-		if (infiles.size() == 2) {
-			System.out.println("Two fastq files as input!");
-			resargs[1][0] = "InTwofastq";
-		}
-		if (infiles.size() > 2) {
-			System.out
-					.println("More than two valid files as an input found. Exit.");
-			Exit();
-		}
-		String testq = "";
-		int infcnt = 0;
-		for (int u = 0; u < infiles.size(); u++) {
-			infcnt = 0;
-			testq = infiles.get(u);
-			for (int uj = 0; uj < infiles.size(); uj++) {
-				if (testq.equals(infiles.get(uj)))
-					infcnt = infcnt + 1;
-				if (infcnt > 1) {
-					System.out
-							.println("input file was typed two times in " +
-							"arguments.\nExit.");
-					Exit();
-				}
-			}
-			// System.out.println(infiles.get(u));
-		}
-
-		for (int i = 0; i < argmns.length; i++) {
-			if (argmns[i].equals("-o")) {
-				if (i < argmns.length - 1) {
-					longread = argmns[i + 1];
-					outfl = new File(longread);
-					ftnm = outfl.getName();
-					if (longread.equals(ftnm)) {
-						root_pth = new java.io.File(".").getCanonicalPath();
-						root_pth = root_pth + "/";
-						flpth = root_pth + ftnm;
-						resargs[2][0] = "outputpath";
-						resargs[2][1] = flpth;
-						corcnt = corcnt + 1;
-						cucrinf = "Output is OK!";
-						correct_report = correct_report + cucrinf + "\n";
-						System.out.println("Output is OK!");
-						if (pibal == 1)
-							resargs[3][1] = flpth;
-
-					} else if (!(longread.equals(ftnm))) {
-						if (testParentDirectoryExistence(argmns[i + 1])) {
-							resargs[2][0] = "outputpath";
-							longread = argmns[i + 1];
-							resargs[2][1] = longread;
-							corcnt = corcnt + 1;
-							cucrinf = "Output is OK!";
-							correct_report = correct_report + cucrinf + "\n";
-							System.out.println("Output is OK!");
-							if (pibal == 1)
-								resargs[3][1] = longread;
-
-						} else {
-							cumsinf = "Output root folder not found.";
-							missed_report = missed_report + cumsinf + "\n";
-						// System.out.println("Output root folder not found.");
-						}
-					}
-				}
-			}
-			if (argmns[i].equals("-l")) {
-				if (i < argmns.length - 1) {
-					maxlrleg = argmns[i + 1];
-					if (isNumeric(maxlrleg)) {
-						db = Double.parseDouble(maxlrleg);
-						db = Math.ceil(db);
-						maxlrlegi = (int) db;
-						if (maxlrlegi > 3) {
-							cumsinf = "Maximum long read length OK!";
-							resargs[3][1] = Integer.toString(maxlrlegi);
-							corcnt = corcnt + 1;
-						} else {
-							System.out
-									.println("Maximum long read length too " +
-									"small.");
-							Exit();
-						}
-					} else {
-						System.out
-								.println("Maximum long read length Not " + 
-								"Numeric.");
-						Exit();
-					}
-
-				} else {
-					System.out.println("Maximum long read length is missing.");
-					Exit();
-				}
-			}
-
-		}
-
-		// for(int i=0; i<infiles.size(); i++)
-		// {
-		// if(i<infiles.size()-1)
-		// inflss=inflss + infiles.get(i) + ",";
-		// if(i==infiles.size()-1)
-		// inflss=inflss + infiles.get(i);
-		// }
-
-		if (infiles.size() > 1) {
-			for (int i = infiles.size() - 1; i > -1; i--) {
-				if (i > 0)
-					inflss = inflss + infiles.get(i) + ",";
-				if (i == 0)
-					inflss = inflss + infiles.get(i);
-			}
-		}
-
-		// Error fixed on 05/14/2015
-		// if only one fastq file was as an input the path was missed
-		// fixed with the following if statement
-		if (infiles.size() == 1)
-			inflss = inflss + infiles.get(0);
-
-		File tszpd;
-		if (infiles.size() > 0) {
-			tszpd = new File(infiles.get(0));
-			if (isFileGZipped(tszpd)) {
-				// resargs[1][0] = "leftrightreaddfqgz";
-				resargs[0][1] = "notpipe_gz";
-			}
-			if (!(isFileGZipped(tszpd))) {
-				// resargs[1][0] = "leftrightreaddfqgz";
-				resargs[0][1] = "notpipe";
-			}
-		}
-		// Test if the input file is a bam file that contains left and right
-		// read (needs implementation)
-		if (infiles.size() < 1) {
-			resargs[1][0] = "bamfile";
-			resargs[0][1] = "pipe";
-			System.out.println("Piped bam file expected.");
-			// resargs[1][1] = "none";
-		}
-
-		if (infiles.size() > 0) // string >0
-		{
-			resargs[1][1] = inflss;
-		}
-		System.out.println("End of testArgsforFrags method!");
-
-		return resargs;
-	}
-	// test frag (END)
-	// test noisetab (START)
-
-	
-	
-	
+	//test argumends for frag (END)
 	//extract -a T -p chr2:12307676 my.bam
 	//output in fastq
+
 	public static String[][] testArgsforExtract(String[] argmns)
 			throws IOException
 	{
@@ -2523,18 +1978,31 @@ public class Leucippus
 				.println("\n\nStart of test arguments for creating noise " +
 				"tables .....\n");
 
-		String info = "\nUsage: leucippus noisetab [options] file1.bam [file2.bam, ...]\n\n"
+//		String info = "\nUsage: leucippus noisetab [options] file1.bam [file2.bam, ...]\n\n"
+//				+ "Options:     -interval FILE  file with intervals\n"
+//				+ "             -ref      FILE  FASTA file with reference sequence (could be .gz file)\n"
+//				+ "             -o        FILE  output file\n"
+//				+ "             -q              quality cut off 0-100 [20]\n"
+//				+ "             -d              distance cut off [-1]\n\n";
+
+		String info = "\nUsage: Leucippus noisetab [options] file1.bam [file2.bam, ...]\n\n"
 				+ "Options:     -interval FILE  file with intervals\n"
 				+ "             -ref      FILE  FASTA file with reference sequence (could be .gz file)\n"
 				+ "             -o        FILE  output file\n"
-				+ "             -q              quality cut off 0-100 [20]\n"
-				+ "             -d              distance cut off [-1]\n\n";
+				+ "             -q              base quality cut off 0-100 [20]\n"
+				+ "             -pad            padding range at read ends [1]\n"
+				+ "             -d              distance cut off [-1]\n"
+				+ "		-msmct	        exclude all reads above mismatch cutoff [-1]\n\n";
+				//+ "             -j              java version 1.7 or 1.8 [1.7]\n\n"; java version is retrieved
 
 		// Default values for base quality and distance qual = 20 and distance =
 		// -1
 		boolean donotproceed=false;
 		String reason="";
-		int qbal = 0, dbal = 0, pbal=0; // indicators for quality and distance
+		// if donot proceed == true then collected reason must be provided
+
+
+		int qbal = 0, dbal = 0, pbal=0, msbal=0; // indicators for quality and distance
 		// if ==0 then the default value will be used.
 		int dis = 0;
 		// Variables that were created in order to allow output file name to be
@@ -2546,7 +2014,7 @@ public class Leucippus
 		// used.
 		int padi=1;
 		String pad="";
-		String[][] resargs = new String[7][2];
+		String[][] resargs = new String[8][2];
 		String bmcorrect = "";
 		String missed_report = "", cumsinf = "";
 		String correct_report = "", cucrinf = "";
@@ -2559,18 +2027,21 @@ public class Leucippus
 		resargs[5][0] = "reference";
 		resargs[6][0] = "defpad";
 		resargs[6][1] = "1";
-
+		resargs[7][0] = "defmsmct";
+		resargs[7][1] = "-1";
 		String bamfls = "", bampth = "", prmpath = "", outpth = "", 
-		dist = "", qual = "", refpath = "";
+		dist = "", qual = "", refpath = "", mismcut="";
 		for (int i1 = 0; i1 < 5; i1++)
 			for (int i2 = 0; i2 < 2; i2++)
 				resargs[i1][i2] = "";
-		if ((argmns[argmns.length - 2].equals("-interval"))
+		if (		   (argmns[argmns.length - 2].equals("-interval"))
 				|| (argmns[argmns.length - 2].equals("-q"))
 				|| (argmns[argmns.length - 2].equals("-o"))
 				|| (argmns[argmns.length - 2].equals("-d"))
 				|| (argmns[argmns.length - 2].equals("-pad"))
-				|| (argmns[argmns.length - 2].equals("-ref"))) {
+				|| (argmns[argmns.length - 2].equals("-ref")) 
+				|| (argmns[argmns.length - 2].equals("-msmct")))
+			{
 			bmcorrect = "bammissing";
 			resargs[0][0] = bmcorrect;
 		}
@@ -2578,8 +2049,9 @@ public class Leucippus
 				|| (argmns[argmns.length - 1].equals("-q"))
 				|| (argmns[argmns.length - 1].equals("-o"))
 				|| (argmns[argmns.length - 1].equals("-d"))
-				|| (argmns[argmns.length - 2].equals("-pad"))
-				|| (argmns[argmns.length - 1].equals("-ref"))) {
+				|| (argmns[argmns.length - 1].equals("-pad"))
+				|| (argmns[argmns.length - 1].equals("-ref"))
+				|| (argmns[argmns.length - 1].equals("-msmct"))){
 			bmcorrect = "bammissing";
 			resargs[0][0] = bmcorrect;
 		} else {
@@ -2587,7 +2059,7 @@ public class Leucippus
 			resargs[0][0] = bmcorrect;
 		}
 		// creat counters to test the uniquenes of entered variable-values
-		int bcn = 0, icn = 0, qcn = 0, dcn = 0, ocn = 0, pdcn=0, refcnt = 0;
+		int bcn = 0, icn = 0, qcn = 0, dcn = 0, ocn = 0, pdcn=0, refcnt = 0, msmctcnt=0;
 		// ------If there is double instance then Exit();
 
 		for (int i = 0; i < argmns.length; i++) {
@@ -2606,11 +2078,13 @@ public class Leucippus
 				pdcn = pdcn + 1;
 			if (argmns[i].equals("-ref"))
 				refcnt = refcnt + 1;
+			if (argmns[i].equals("-msmct"))
+				msmctcnt = msmctcnt + 1;
 		}
 // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 // ___________________________________________________________________________________________________
 		if ((bcn > 1) || (icn > 1) || (qcn > 1) || (ocn > 1) || (dcn > 1)
-				|| (pdcn > 1) || (refcnt > 1)) {
+				|| (pdcn > 1) || (refcnt > 1) ||(msmctcnt>1)) {
 			System.out
 					.println("Found more than one instace of operators, \nExit.");
 			Exit();
@@ -2629,7 +2103,7 @@ public class Leucippus
 					+ "Base Quality value is missing. Base Quality default value will be used. q = 20\n";
 		if (pdcn == 0)
 			missed_report = missed_report
-					+ "Pading value is missing. Padding default value will be used. -pad = 1\n";
+					+ "Padding value is missing. Padding default value will be used. -pad = 1\n";
 		if (ocn == 0)
 			missed_report = missed_report + "Output file is missing.\n";
 
@@ -2647,10 +2121,10 @@ public class Leucippus
 		// correspondingly;
 		// and the 'corcnt' counter will be incremented for them anyway.
 		int quali = 20, disti = -1;
-
+		
 		// resargs[0][0] = "bams";
 		int bmcnt = 0;
-
+		double msmctdb=0.0;
 		File bmfl;
 		String crarg = "";
 		// System.out.println(" --- > " + resargs[0][0]);
@@ -2741,25 +2215,54 @@ public class Leucippus
 					File outfl = new File(outtest);
 					ftnm = outfl.getName();
 					if (outtest.equals(ftnm)) {
-						root_pth = new java.io.File(".").getCanonicalPath();
-						root_pth = root_pth + "/";
-						flpth = root_pth + ftnm;
-						resargs[2][0] = "outputpath";
-						resargs[2][1] = flpth;
-						corcnt = corcnt + 1;
-						cucrinf = "Output is OK!";
-						correct_report = correct_report + cucrinf + "\n";
-						// System.out.println("Output is OK!");
-					} else if (!(outtest.equals(ftnm))) {
-						if (testParentDirectoryExistence(argmns[i + 1])) {
+						if(!(testFileExistence(outtest)))
+						{
+							root_pth = new java.io.File(".").getCanonicalPath();
+							root_pth = root_pth + "/";
+							flpth = root_pth + ftnm;
 							resargs[2][0] = "outputpath";
-							outpth = argmns[i + 1];
-							resargs[2][1] = outpth;
+							resargs[2][1] = flpth;
 							corcnt = corcnt + 1;
 							cucrinf = "Output is OK!";
 							correct_report = correct_report + cucrinf + "\n";
-							// System.out.println("Output is OK!");
-						} else {
+						}
+						else
+						{
+							cumsinf = "Output file allready exists.\n" +
+								"  please remove existing output file(s) or\n"+
+								"  change the output file name.";
+							missed_report = missed_report + cumsinf + "\n";
+							donotproceed=true;
+							reason=reason+cumsinf+"\n";
+						}
+						
+						// System.out.println("Output is OK!");
+					} else if (!(outtest.equals(ftnm))) {
+						if (testParentDirectoryExistence(argmns[i + 1])) 
+						{
+							if(!(testFileExistence(outtest)))
+							{
+								resargs[2][0] = "outputpath";
+								outpth = argmns[i + 1];
+								resargs[2][1] = outpth;
+								corcnt = corcnt + 1;
+								cucrinf = "Output is OK!";
+								correct_report = correct_report + cucrinf + "\n";
+								// System.out.println("Output is OK!");
+							}
+							else
+							{
+							cumsinf = "Output file allready exists.\n" +
+								"  please remove existing output file(s) or\n"+
+								"  change the output file name.";
+								missed_report = missed_report + cumsinf + "\n";
+								donotproceed=true;
+								reason=reason+cumsinf+"\n";
+
+							}
+						} 
+						else 
+						{
 							cumsinf = "Output root folder not found.";
 							missed_report = missed_report + cumsinf + "\n";
 							donotproceed=true;
@@ -2853,6 +2356,45 @@ public class Leucippus
 					}
 				}
 			}
+			if (argmns[i].equals("-msmct")) {
+				if (i < argmns.length - 1) {
+					// restriction for integer
+					mismcut = argmns[i + 1];
+				if (isNumeric(mismcut)) {
+					msmctdb = Double.parseDouble(mismcut);
+					if(msmctdb>=0 && msmctdb<=100)
+					{
+						resargs[7][0] = "mismcut";
+						resargs[7][1] = mismcut;
+						corcnt = corcnt + 1;
+						cucrinf = "Mismatch cutoff is OK!";
+						correct_report = correct_report + cucrinf + "\n";
+						msbal=1;
+					}
+					else
+					{
+						resargs[7][0] = "mismatcherror";
+						cumsinf = "Mismach is not valid (out or range (0-100)).";
+						resargs[7][1] = mismcut;
+						missed_report = missed_report + cumsinf + "\n";
+						reason=reason+cumsinf+"\n";
+						msbal=3;
+					}
+
+
+					// System.out.println("Quality is OK!");
+				} else {
+					resargs[7][0] = "mismatcherror";
+					cumsinf = "Mismach  is not valid (not numeric).";
+					resargs[7][1] = mismcut;
+					missed_report = missed_report + cumsinf + "\n";
+					reason=reason+cumsinf+"\n";
+					// System.out.println("Quality is not valid.");
+					msbal= 3;
+				}
+			      }
+			}
+
 		}
 
 		if (bamfls.length() >= 1) {
@@ -2891,6 +2433,14 @@ public class Leucippus
 			correct_report = correct_report + cucrinf + "\n";
 
 		}
+		if (msbal == 0)
+		{
+			resargs[7][0] = "defmismatch";
+			resargs[7][1] = "-1";
+			corcnt = corcnt + 1;
+			cucrinf = "Default mismath value = -1  OK!";
+			correct_report = correct_report + cucrinf + "\n";
+		}
 		System.out.println("Missing|Errors Values :\n" + missed_report + "\n");
 		System.out
 				.println("Correct|Default Values :\n" + correct_report + "\n");
@@ -2907,7 +2457,7 @@ public class Leucippus
 			System.out.println("Error/Missing :\n" + reason+"Exit.\n");
 			Exit();
 		}
-		if (corcnt < 7) {
+		if (corcnt < 8) {
 			Exit();
 		}
 		return resargs;
@@ -4137,6 +3687,9 @@ public class Leucippus
         System.out.println("            Start  of  TestBufferedReaderPass method!");
 
         boolean storefailed=false;
+	boolean br2WasNull = true;
+	if(!(br2 == null))
+		br2WasNull=false;
         String shortread1out=null, shortread2out=null;
         BufferedWriter bw1=null, bw2=null;
         int br1rcnti=0, br2rcnti=0;
@@ -4305,9 +3858,9 @@ public class Leucippus
                         // System.out.println("Long Read type = " + type);
                         lrcnt = lrcnt + 1;
     
-                        if (lrcnt % 500 == 0)
+                        if (lrcnt % 50000 == 0)
                             System.out.println("LR nm = " + lrcnt);
-                        
+                   
                         bw.write(lread_1);
                         bw.newLine();
 //                      if (lrcnt>10000)
@@ -4315,8 +3868,6 @@ public class Leucippus
 //                        bw.close();
 //                        Exit();
 //                      }
-                        
-                        
                     }
  
                     else if ( (lread_1.equals("none")) && (storefailed==true) ) 
@@ -4400,7 +3951,7 @@ public class Leucippus
                                 {
                                     // System.out.println("Long Read type = " + type);
                                     lrcnt = lrcnt + 1;
-                                    if (lrcnt % 500 == 0)
+                                    if (lrcnt % 50000 == 0)
                                         System.out.println(lrcnt);
                                     bw.write(lread_2);
                                     bw.newLine();
@@ -4616,7 +4167,7 @@ public class Leucippus
                                 // System.out.println("Long Read type = " + type);
                                 lrcnt = lrcnt + 1;
             
-                                if (lrcnt % 100 == 0)
+                                if (lrcnt % 50000 == 0)
                                     System.out.println("LR nm = " + lrcnt);
                                 
                                 bw.write(lread_1);
@@ -4664,8 +4215,10 @@ public class Leucippus
             finally
             {
                 System.out.println("Second Finally works!");
-                System.out.println("total reads 1 = " + br1rcnti);
-                System.out.println("total reads 2 = " + br2rcnti);
+                System.out.println("total reads in file 1 = " + br1rcnti);
+		
+		if(br2WasNull==false)
+                	System.out.println("total reads in file 2 = " + br2rcnti);
             }
                 
             if (!(br1 == null))
@@ -5271,8 +4824,8 @@ public class Leucippus
             finally
             {
                 System.out.println("Second Finally works!");
-                System.out.println("total reads 1 = " + br1rcnti);
-                System.out.println("total reads 2 = " + br2rcnti);
+                System.out.println("total reads in file 1 = " + br1rcnti);
+                System.out.println("total reads in file 2 = " + br2rcnti);
 
 
 		//  name = "", read = "", qual
@@ -6241,16 +5794,16 @@ public class Leucippus
 
 /**
  * "makeLongRead" method accepts two parameters Readob (Read object). 
- * The reads passed are paired reads. The sequence in one of them have been reverse 
- * complemented The sequences of the reads can be directly slided one to another
- * from both sides kepping the direction unchenged(a. slide from first read end on
+ * The reads passed are paired reads. The sequence in one of them have been reversed and 
+ * complemented. The sequences of the reads can be directly slided one to another
+ * from both sides keeping the direction unchanged(a. slide from first read end on
  * second read start, b. slide from second read end on first read start)
  *  
  * @param read1 Readob Object : Read (read name read sequence, read base quality)
  * @param read2 Readob Object : Read (read name read sequence, read base quality)
  * @return
  */
-	private static String makeLongRead(Readob read1, Readob read2, int minoverlap) {
+    private static String makeLongRead(Readob read1, Readob read2, int minoverlap) {
 	    // makeLongRead method (START)
 		// System.out.println("'frags' Make Long Read Method!");
 //		09/28/2015 In frag specify minimum overlap (user defined, 
@@ -6401,9 +5954,10 @@ m++;
 			// -----------------------------------------------------------------------------------------------------------------
 			// if((rplr.get(il)<minlr) && (
 			// (il-matcheslr.get(il)<((double)(il))/3)) && (il>=50) )
-			if ((rplr.get(il) < minlr)
-					&& ((il - matcheslr.get(il) <= ((double) (il)) / 4))
-					&& (il >= minovrlp))
+		    if (rplr.get(il) < minlr &&
+// 			(il - matcheslr.get(il) <= ((double) (il)) / 4) &&
+			(il - matcheslr.get(il) <= ((double) (il)) / 20) &&
+			il >= minovrlp)
 			{
 				minlr = rplr.get(il);
 				indexlri = il;
@@ -6742,6 +6296,8 @@ m++;
 			Vector<String> dtflnmspth) throws IOException, InterruptedException 
 	{
 		int wlen=11;
+		int crsamoutsize = 0;
+		File f;
 		temp_path = temp_path + "/";
 		String samtoolsview = "";
 /*
@@ -6771,6 +6327,7 @@ m++;
 		}
 
 		ProcessBuilder pb;
+		Process p;
 		try {
 
 			System.out.println(locus);
@@ -6778,7 +6335,17 @@ m++;
 														// file
 			{
 
+// Date : 12/02/2016
+//			locus culd be of two types	a) chr1-22, chrX chrY:#-#
+//							b) 1-22, X, Y:#-#
+//			plan :  1 Generate samtools command with the second type and run it
+//				2 Check the output file if its empty :
+//									- if not the procced in next step
+//									- if yes then generate sometools command 
+//										for the first type and the proceed
+// Date : 12/02/2016
 				System.out.println("'/bin/bash', '-c', " + samtoolsview 
+						//+ dtflnmspth.get(i) + " " + locus + " " + "-o "
 						+ dtflnmspth.get(i) + " " + locus + " " + "-o "
 						+ temp_path + i + ".txt");
 				pb = new ProcessBuilder("/bin/bash", "-c", samtoolsview 
@@ -6789,17 +6356,41 @@ m++;
 				// + dtflnmspth.get(i) + " " + locus + " "
 				// + "-o " + results1_path + i + ".txt");
 				
-				Process p = pb.start();
+				p = pb.start();
 				System.out.println("Process Started ....");
 				p.waitFor();
-
 				System.out.println("......Process Ended.");
 				System.out.println("File ready.");
-
+								
 				currentsample = readTheFileIncludeFirstLineWrdlen(temp_path + i
 						+ ".txt", i + ".txt", wlen);
-				System.out.println("Current Sample size = " + currentsample.size());
-				File f = new File(temp_path + i + ".txt");
+				crsamoutsize=currentsample.size();
+				System.out.println("Current Sample size = " + crsamoutsize);
+				
+				if(crsamoutsize==0)
+				{
+					System.out.println("samtools output is empty\nadded 'chr' string in locus.");
+					f = new File(temp_path + i + ".txt");
+					f.delete();
+					locus = "chr" + locus;
+					System.out.println("'/bin/bash', '-c', " + samtoolsview 
+					//+ dtflnmspth.get(i) + " " + locus + " " + "-o "
+					+ dtflnmspth.get(i) + " " + locus + " " + "-o "
+					+ temp_path + i + ".txt");
+					pb = new ProcessBuilder("/bin/bash", "-c", samtoolsview 
+					+ dtflnmspth.get(i) + " " + locus + " " + "-o "
+					+ temp_path + i + ".txt");
+					p = pb.start();
+					System.out.println("Process Started ....");
+					p.waitFor();
+					System.out.println("......Process Ended.");
+					System.out.println("File ready.");
+					currentsample = readTheFileIncludeFirstLineWrdlen(temp_path + i
+						+ ".txt", i + ".txt", wlen);
+					crsamoutsize=currentsample.size();
+					System.out.println("Current Sample size = " + crsamoutsize);
+				}
+				f = new File(temp_path + i + ".txt");
 				f.delete();
 
 				// System.out.println("Vector is done for mynewfile" + i +
@@ -6809,7 +6400,6 @@ m++;
 							+ currentsample.get(k));
 				// It looks like the new data line includes the origine (bam
 				// file name) and the actual line (starting from the read name)
-
 			}
 		} finally {
 			System.out.println("ProcessEnded");
@@ -6877,7 +6467,7 @@ m++;
 	// and if it falls in the [1-10] area the coresponding counter is
 	// incremented.
 	// Before the program ends a file with these results is created.
-	public static void QC(Vector<String> vlns, String refseq) {
+	public static Vector<String> QC(Vector<String> vlns, String refseq, int mismactcut) {
 		// percmis
 		char[] refsech = refseq.toCharArray();
 		int res = 0;
@@ -6921,10 +6511,17 @@ m++;
 					if (sech[j] == refsech[j])
 						counter = counter + 1;
 			}
-			
+			//pmis.add("[0-1]%	(1-2]%	(2-3]%	(3-4]%	(4-5]%	(5-6]%	(6-7]%	(7-8]%	(8-9]%	(9-10]%	>10%");		
+//				pmis.add(percmis[0] + "\t" + percmis[1] + "\t" + percmis[2] + "\t"
+//				+ percmis[3] + "\t" + percmis[4] + "\t" + percmis[5] + "\t"
+//				+ percmis[6] + "\t" + percmis[7] + "\t" + percmis[8] + "\t"
+//				+ percmis[9] + "\t" + percmis[10]);
+
 			double resu = 1 - (double) counter / (double) readactualsize;
+
 			// System.out.println(resu);
-			if ((resu >= 0.0) && (resu <= 0.1))
+			//if ((resu >= 0.0) && (resu <= 0.1))
+			if ((resu >= 0.0) && (resu <= 0.01))
 				percmis[0] = percmis[0] + 1;
 			if ((resu > 0.01) && (resu <= 0.02))
 				percmis[1] = percmis[1] + 1;
@@ -6946,29 +6543,38 @@ m++;
 				percmis[9] = percmis[9] + 1;
 			if ((resu > 0.10))
 				percmis[10] = percmis[10] + 1;
+			if(mismactcut>-1 && resu*100>mismactcut)
+			{
+				if(i>1)
+				{
+					vlns.remove(i);				
+					i=i-1;
+				}	
+			}
 		}
+		return vlns;
 	}
 
 	/**
-	 * 'maketables' method creates tables from bam files that contain reads
-	 * generated from amplicon sequencing or capture. The method accepts sites
-	 * -information contained in elements of the 'prms' String Vector (passed 
-	 * as a parameter). Each site information is organized into words separated by
-	 * tabs in a sentence(String Vector element). The method uses an outer loop 
-	 * that goes through each site. At the beginning of the loop the site 
-	 * (Vector String element) is splited into words. Next the chromosomal 
-	 * coordinates for the locus are constructed and used to query all bam files.
-	 * The data lines returned from all bam files are filtered out using 
-	 * mapping quality >= 30. The remaining data will undergo a sequence(read) and
-	 * quality transformation. In short by looking at the read position, and the cigar
-	 * information the sequence and its quality will be transformed in the 
-	 * following way : The read will start and end in the site range start and end 
-	 * points(reads that exceed those points will be trimmed out; reads that are within
-	 * those points Ps will be added to the side(s). Eventully all reads after 
-	 * transformation will have the same start and end points. Before the transformation
-	 * process the reads are transformed acording to cigar( D(s) are added to the 
+	 * 'maketables' method creates tables from bam files that contain reads generated 
+         * from amplicon sequencing or capture. The method accepts sites-information contained 
+         * in elements of the 'prms' String Vector (passed as a parameter). Each site 
+         * information is organized into words separated by tabs in a sentence(String Vector 
+         * element). The method uses an outer loop that goes through each site. At the 
+         * beginning of the loop the site (Vector String element) is splited into words. Next 
+         * the chromosomal coordinates for the locus are constructed and used to query all bam 
+         * files. To do so 'RetrieveDataFromBam' method is called from here. The method uses 
+         * samtools command to query bam file(s) from command line. The data lines returned 
+         * from all bam files are filtered out using mapping quality >= 30. The remaining data 
+         * will undergo a sequence(read) and quality transformation. In short by looking at 
+         * the read position, and the cigar information the sequence and its quality will be 
+         * transformed in the following way : The read will start and end in the site range 
+         * start and end points(reads that exceed those points will be trimmed out; reads that 
+         * are within those points Ps will be added to the side(s). Eventully all reads after 
+         * transformation will have the same start and end points. Before the transformation 
+         * process the reads are transformed acording to cigar( D(s) are added to the 
 	 * sequence; insertion(s) are removed from sequence; Ss and Hs are handled properly.
-	 * If there is N(s) information in cigar then lower case d(s) are added to the the
+	 * If there is N(s) information in cigar then lower case d(s) are added to the
 	 * corresponding read positions in both read(sequence) and quality fields.
 	 * After this primary preparation all Read Nucleotides can be mapped directly to
 	 * the reference. In short there is a primary treansformation that regains the length 
@@ -6993,22 +6599,19 @@ m++;
 	 * deletions found starting from next position). About insertion(s) the next position 
 	 * insertion(s) is recorded. The number of next position insertions and the sequence
 	 * and its counts is also recorded. More information about this method will be added
-	 * later.
+	 * later.Indel Coverage column has been added to the table in order to be used for indel 
+	 * frequency calculation. Indel coverage differs from position coverage 
 	 * INDELS Explaining
 	 * The indels are reported as followng:
 	 * counting of counting of number of deletions + informative of 
 	 * for example A,A,A,A means that for the next position (A) have been found
-     * four valid reads that have the following position deleted The deletions
-	 * are all single nucleotide deletions thas the del position one will
-     * be incremented by four
-     * similarly ACCT means that starting from next position there is a deletion
-     * found of the folowing four nucleotides. The del position four will be
-     * icreased by one(ACCT are the sequence of nucleotides after this position
-	 * The insertion follow the similar rules.
-	 * Insertions and deletions informative fields are null if there 
-     * is zero coverage 
-	 * It calls samtools command
-	 * to query bam files from command line.
+         * four valid reads that have the following position deleted The deletions
+	 * are all single nucleotide deletions thus the del position one will
+         * be incremented by four. Similarly ACCT means that starting from next position there 
+         * is a deletion found of the folowing four nucleotides. The del position four will be
+         * icreased by one(ACCT are the sequence of nucleotides after this position
+	 * The insertions follow similar rules.
+	 * Insertions and deletions informative fields are null if there is zero coverage.
 	 * Parameters Explain   
 	 * @param bash_path : path to bash  
 	 * @param samtools_path : path to samtools
@@ -7022,6 +6625,7 @@ m++;
 	 * start and end in a distance more than dcuti ( abs(read start - site range start)>dcuti  ) 
 	 * @throws IOException
 	 * @throws InterruptedException
+	 *
 	 */
 //	04/26/216
 //	Problem appeared while running the program with java version 8.0. ->
@@ -7047,7 +6651,7 @@ m++;
 //	08/01/2016
 	public static void makeTables(String bash_path, String samtools_path,
 			String input, String output, String perc, Vector<String> prms,
-			Vector<String> bms, String tmppath, int dcuti, String pad, String jv) throws IOException,
+			Vector<String> bms, String tmppath, int dcuti, String pad, String jv, int mismcuti) throws IOException,
 			InterruptedException {
 
 // **************************************************************************************************************************\\
@@ -7069,6 +6673,15 @@ m++;
 
 //	04/26/2016
 	int totallines=0, reminedlines_d=0, reminedlines_d_p=0;
+
+//	02/09/2017
+	String indelstype="", cumindels="";
+//	Used to identifying the indel string
+// 	If it is insertion then its sides in the read remain the same
+//	If it is deletion then right side represents deletion
+//	New methods have been added to create set indels counts and 
+//	poly indel identification
+//	02/09/2017
 
 	Vector<String> pmis = new Vector<String>();
 	for (int i = 0; i < percmis.length; i++)
@@ -7116,6 +6729,7 @@ m++;
 // 		ind_cov  = includes all reads (without quality cutoff) 08/01/2016
 
 		int mqi = 30;
+//		mqi=-1;
 		System.out.println("Maping Quality > " + mqi);
 		Vector<String> reslts = new Vector<String>();
 		String cursmline = "", fnline = "", bflnm = "", chromosome = "", positions = "", MAPQ = "", cigar = "", sequence = "", flg = "", qual = "", truefalse = "", strand = "", readname = "";
@@ -7130,7 +6744,7 @@ m++;
 		String dseq = ""; // holds deletion sequences
 		String vcline = "", vcseqpaded = "";
 		int vcposition = 0, vcrefid = 0, vcend = 0;
-// 05/03/2015 Changed to accept Chromosome X and Y	
+// 05/03/2015 Changed to accept Chromosome X and Y
 		String vcrefidS="";
 // 05/03/2015 Changed to accept Chromosome X and Y	
 		String vcseq = "", vcqual = "";
@@ -7142,7 +6756,7 @@ m++;
 		int poscov = 0; //poscov = #A+#C+#T+#G+#D
 		String resline = ""; // results line
 		int indcov=0;
-// 		Prepare table Header String 
+// 		Prepare table Header String
 		resline = "chromosome\t"	// index 0
 			+ "site\t" 		// index 1
 			+ "x\t" 		// index 2
@@ -7336,7 +6950,9 @@ m++;
 				Right_starti = Integer.parseInt(Right_start);
 // 	06/03/2015 Change made in the extension of the border when construct locus(coordinates to query bam files
 //	06/03/2015 In new data the sites could be close enough. So the extension have been reduced to 10 bases in each side(it was 150)
+//				locus = CHROM + ":" + (Left_starti - 10) + "-"
 				locus = CHROM + ":" + (Left_starti - 10) + "-"
+
 						+ (Right_starti + 10);
 				System.out.println(locus);
 				rdnmln = refseq;
@@ -7347,7 +6963,7 @@ m++;
 
 				totaldatacol = RetrieveDataFromBam(bash_path, samtools_path,
 						tmpuiid, locus, bms);
-				System.out.println("Elaborate Data for primer : " + h);
+				System.out.println("Elaborate Data for merged interval : " + h);
 //**********************************************************************************************//
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&//
 //**********************************************************************************************//
@@ -7584,7 +7200,8 @@ m++;
 // 				QUALITY CONTROL Calculate the percenta ge of mismatches for				
 // 				each read, group those reads and then count them
 // 				creatte a report log file
-				QC(vlns, refseq);
+				vlns = QC(vlns, refseq, mismcuti);
+
 // 				QUALITY CONTROL Calculate the percentge of mismatches
 
 				// tpogtmm = tpogtmm + gettenpercentorgtmimath(vlns,refseq);
@@ -7614,15 +7231,12 @@ m++;
 					// Go trough each data line take the read and create a
 					// character arrey that
 					// holds its bases as elements
-					// The collective array has designed in such a way that can
-					// update all its elements
-					// with each data line passesd. One can imagine it as a
-					// table that has # (noisetablelength) rows
-					// and 14 columns. Each row contains information about one
-					// referense position
-					// and how this position has found in all particular
-					// primer-pair resulting reads.
-					// The update procedure is recorded line by line
+					// The collective array has been designed in such a way that it can
+					// update all its elements with each data line passesd. One can 
+                                        // imagine it as a table that has # (noisetablelength) rows
+					// and 14 columns. Each row contains information about one referense position
+					// and how this position has been found in all particular primer-pair resulting reads.
+					// The update procedure is recorded line by line.
 
 					for (int i3 = 0; i3 < vlns.size(); i3++) 
 					{
@@ -7706,7 +7320,6 @@ m++;
 						// for(int s=0; s<carql.length; s++)
 						// System.out.println(carsq[s] + " " + carql[s]);
 
-						// first index 0 0 will hold the position
 						// example noisetable[0][0]  : chromosome
 						// example noisetable[0][1]  : site
 						// example noisetable[0][2]  : x
@@ -7886,6 +7499,7 @@ m++;
 										// noisetable[i4][22+10] + isinf;
 									}
 								}
+
 							}
 //	Insertions	Insertions	Insertions	Insertions	Insertions	Insertions	Insertions
 //	Insertions	Insertions	Insertions	Insertions	Insertions	Insertions	Insertions
@@ -8052,6 +7666,7 @@ m++;
 					// vcposition = Integer.parseInt(vcwords[5]);
 					// vcrefid = Integer.parseInt(vcwords[4]);
 					// vcseq =
+//CALCULATE SITE COVERAGE, CALCULATE INDEL COVERAGE 			
 					for (int i5 = 0; i5 < carrs.length; i5++) 
 					{
 						
@@ -8063,7 +7678,21 @@ m++;
 						// example noisetable[0][10] : #G
 						// example noisetable[0][11] : #D
 						// totalbasecount[i4][0]
+						curposition = refstart + i5;
+						
+						if(!(noisetable[i5][34].isEmpty()))
+						{
+							indelstype = "dls";
+							noisetable[i5][34] = RetrieveIndelinfo(prmline, curposition, noisetable[i5][34], indelstype);
+						}						
+						if(!(noisetable[i5][35].isEmpty()))
+						{
+							indelstype = "ins";
+							noisetable[i5][35] = RetrieveIndelinfo(prmline, curposition, noisetable[i5][35], indelstype);
+						}
 
+
+			// SITE COVERAGE
 						poscov = 
 								Integer.parseInt(noisetable[i5][7] )  + //  #A
 								Integer.parseInt(noisetable[i5][8] )  + //  #C
@@ -8075,7 +7704,7 @@ m++;
 						// calculate indel coverage START
 						// indelcov = without quality cutoff : #A + #C + #T + #G + #D + #Ps  
 //						// indcov = poscov + Integer.parseInt(noisetable[i5][12]);
-
+			// INDEL COVERAGE
 						indcov = 
 						totalbasecounts[i5][0] +
 						totalbasecounts[i5][1] +
@@ -8195,6 +7824,8 @@ m++;
 							//	}
 							}
 						}
+
+
 						//noisetable[i5][13] = Integer.toString(totallines);
 						noisetable[i5][13] = "0"; 
 						noisetable[i5][34]=null;
@@ -8315,12 +7946,22 @@ m++;
 				+ "\nTotal Number of Reads with > 10% mismatches = " + tpogtmm);
 		// Delete the folder in the temporary folder with a unique name to hold
 		// temporary data files
+		
+
 		// tmpuiid
 		if (dutmp.exists()) {
 			dutmp.delete();
+
+
 			// System.out.println("By Now the folder '" + dutmp.getName() +
 			// "'  should have been deleted!");
 		}
+
+
+
+
+
+
 		/*
 		 * } } } } //System.exit(0); //System.out.println("lines size = " +
 		 * vlns.size()); // prepare the array numbers that hold string numbers
@@ -8329,6 +7970,3235 @@ m++;
 		 * noisetable[nt][nt1]="0"; if(vlns.size()>0)
 		 */
 	}
+
+
+
+
+
+
+
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+	public static String RetrieveIndelinfo(String primer, int position, String Indels, String type)
+	{		
+		String chrom="", refstart="", refend="", reference="", 
+		sites="", refs="", alts="",
+		cr="", crstart="", crend="", indlcounts="", 
+		idlcntpl="", idlcntplmatch="", 
+		idlcntplbestmatch="", refprmseq = "", shifts="", 
+		lefrep="", rigrep="", rstart="", 
+		crlftt="", leend="", crright="", alinsline="", inscrpos="", 
+		altinsscr="", trufalse="", crlrp="", crrepstartl="", crrependl="", 
+		crrepstartr="", crrependr="", combtrans="", crecmb="",
+		crrrp="", ide="", leftborder="", rightborder="", results1="",
+		results="", cumures="", delimiter=",",
+		cumulativeresults="", print="p", crindtot="", crindancnt="", 
+		crindel="", refleftpart="", refrightpart="", spaces="",craltline="", 
+		cralt="", craltstart="", cralttruefalse="", crresult="", 
+		cumuresult="", crcombined="", crleftreptot="", crrightreptot,
+		crleftrep="", crrightrep="";
+	
+		int repstarting=0; int repending=0;
+		String crrrrep="";
+
+		int inscrposi=0,curposi=0, crrepstartli=0, crrependli=0,
+		crrepstartri=0, crrependri=0, ad=0, maxrepsize=0, repleftsize=0,
+		reprigthsize=0, rstarti=0, crlendi=0, 
+		dist=1, leendi=0, crstartii=0, refstarti=0, refendi=0, indstarti=0, indendi=0, 
+		max=0, reflength=0, crpos=0, resindex=0, cnt=0, 
+		posindex=0, maxwinlen=0, crstarti=0, crendi=0,
+		shiftlefti=0, shiftrighti=0, maxwinleni=0, refleni=0,
+		craltstarti=0, craltendi=0, crindlen=0, crleftreplen=0, 
+		crrightreplen=0, crindellen=0;
+		
+		boolean crepinserted = false, leftbordermatch=false, 
+		rightbordermatch=false;
+		
+		Vector<Vector<String>> list = new Vector<Vector<String>>();
+		Vector<String> indelsetvc = new Vector<String>();
+		Vector<Integer> sitesvc = new Vector<Integer>();
+		Vector<Integer> allposvc = new Vector<Integer>();
+		Vector<String> crvc = new Vector<String>();
+		Vector<String> insertionresults = new Vector<String>();
+//		Vector<String> repeatsvector = new Vector<String>();
+//		Vector<String> leftrepeats = new Vector<String>();
+//		Vector<String> rightrepeats = new Vector<String>();
+		Vector<String> alternativeIndels = new Vector<String>();
+		Vector<String> lftrigtcombrepeats = new Vector<String>();
+		
+		Vector<String> resstartvc = new Vector<String>();
+		Vector<Vector<String>> leftAndRightRepeats = new Vector<Vector<String>>();
+		Vector<String> leftrepeatsvc = new Vector<String>();
+		Vector<String> rightrepeatsvc = new Vector<String>();
+		Vector<String> allRepeatsvc = new Vector<String>();
+		Vector<String> combinedrepeats = new Vector<String>();
+
+	// Primer start
+		String[] prwds = primer.split("\t");
+
+		chrom = prwds[0];
+		refstart = prwds[1];
+		refstarti = Integer.parseInt(refstart);
+		refend = prwds[2];
+		refendi = Integer.parseInt(refend);
+		cnt=0;
+		for(int i=refstarti; i<=refendi; i++)
+		{
+			cnt=cnt+1;
+			allposvc.add(i);
+			if(position == i)
+				posindex=cnt;
+		}
+
+		reference = prwds[3];
+		reflength = reference.length();
+		//char[] seqcharar = reference.toCharArray();
+		sites = prwds[4];
+		String[] stswds = sites.split(",");
+		for(int st=0; st<stswds.length; st++)
+			sitesvc.add(Integer.parseInt(stswds[st]));
+		refs = prwds[5];
+		String[] refsar = refs.split(",");
+		alts = prwds[6];
+		String[] altsar = alts.split(",");
+// Primer end		
+
+		indelsetvc = RetrieveIndelSet(Indels);
+		// Find max
+
+		for(int g=0; g<indelsetvc.size(); g++)
+		{
+			//System.out.println(g + " " + indelsetvc.get(g));
+			if(max<indelsetvc.get(g).length())
+				max=indelsetvc.get(g).length();
+		}
+		
+		list  = RetrieveSortedIndelSet(indelsetvc);		
+		indlcounts = CountIndels(list, Indels);
+//		idlcntpl = RetrieveIndelPolyInfoAndSideRepeats(indlcounts, refprmseq, refsidesize, type);
+		idlcntplmatch = findIndelMatchRecentMatch(allposvc, reference, position, indlcounts, type);
+		String cumulindelres="";
+		
+
+
+		if(type.equals("ins"))
+		{
+			indstarti=posindex;
+			indendi=posindex;
+
+			String[] inswds = idlcntplmatch.split(",");
+			for(int r=0; r<inswds.length; r++)
+			{
+				System.out.println("\n\ntotal insertion " + inswds[r]);
+				crindtot=inswds[r];
+				String[] instotwds = crindtot.split("@");
+				crindancnt=instotwds[0];
+				crindel="";
+				for(int in=0; in<crindancnt.length(); in++)
+				{
+					if(!(Character.isDigit(crindancnt.charAt(in))))
+					crindel = crindel + crindancnt.charAt(in);
+					else
+						break;
+				}
+				System.out.println("insertion : " + crindel);
+				
+				refleftpart = reference.substring(0, posindex);
+				refrightpart = reference.substring(posindex, reflength);
+//-->
+				spaces = buildSpaceString(refleftpart.length());
+//-->
+				System.out.println("Left  Part : " + refleftpart);
+				System.out.println("INDEL("+type+")"+" : " + spaces + crindel);
+				System.out.println("Right Part : " + spaces + refrightpart + "\n");
+				//repeatsvector=new Vector<String>();
+				
+//			calculate maximum window
+				if(maxwinleni==0)
+				{
+					if(indstarti<reflength-indendi)
+						maxwinleni=indstarti;
+						//maxwinleni=indstarti+1;
+					else if(indstarti>=reflength-indendi)
+						maxwinleni=reflength-indendi;
+				}
+//			calculate maximum window
+				
+//				retrieve repeats arround initial step
+
+				leftAndRightRepeats = chRepAr(reference, maxwinleni, indstarti, indendi);
+				leftrepeatsvc = leftAndRightRepeats.get(0);
+				rightrepeatsvc = leftAndRightRepeats.get(1);
+				combinedrepeats = leftAndRightRepeats.get(2);
+				
+				//for(int i=0; i<)
+				
+				for(int i=0; i<leftrepeatsvc.size(); i++)
+					allRepeatsvc.add(leftrepeatsvc.get(i));
+				for(int i=0; i<rightrepeatsvc.size(); i++)
+					allRepeatsvc.add(rightrepeatsvc.get(i));	
+
+				shifts = findIndelShifts(leftrepeatsvc, rightrepeatsvc);
+//				example : shifts l r : 2 1
+
+				String[] shiftwds = shifts.split(" ");
+				shiftlefti =Integer.parseInt(shiftwds[0]);
+				shiftrighti=Integer.parseInt(shiftwds[1]);
+				if (indstarti + shiftrighti>=reflength)
+					shiftrighti=reflength-indstarti;
+				if(indstarti-shiftlefti<0)
+				shiftlefti = indstarti;
+				//System.out.println(shiftlefti + " " + shiftrighti);
+
+				alternativeIndels = retrieveAllAlternIndels(
+						reference, crindel, type,
+						indstarti, shiftlefti, 
+						shiftrighti);
+			//	for(int i=0; i<alternativeIndels.size(); i++)
+			//		System.out.println(alternativeIndels.get(i));
+				alternativeIndels = discardDislocatedForms(alternativeIndels, allRepeatsvc);
+				//System.out.println();
+				for(int i=0; i<alternativeIndels.size(); i++)
+				{
+					String[] wds = alternativeIndels.get(i).split("_");
+				//	System.out.println(alternativeIndels.get(i));
+					if(wds[2].equals("false"))
+					{
+						alternativeIndels.removeElementAt(i);
+						i=i-1;
+					}
+				}				
+				
+				System.out.println("\n");
+				for(int i=0; i<alternativeIndels.size(); i++)
+					System.out.println(alternativeIndels.get(i));
+				System.out.println();
+				
+//				cumuresult="", crcombined="", leftborder="", rightborder="",
+//				crleftreptot="", crrightreptot, crleftrep="", crrightrep="", ide="", cumures=""; 
+
+				cumures="";
+				for(int i=0; i<alternativeIndels.size(); i++)
+				{
+
+					craltline = alternativeIndels.get(i);
+
+					String[] altwds = craltline.split("_");
+
+					craltstart        = altwds[0];
+					cralt           = altwds[1];
+					cralttruefalse  = altwds[2];
+					craltstarti       = Integer.parseInt(craltstart);
+					crindlen        = cralt.length();
+					if(type.equals("ins"))
+						craltendi=craltstarti;
+
+					if(craltstarti<reflength-craltendi)
+						maxwinleni=craltstarti;
+					else if(craltstarti>=reflength-craltendi)
+						maxwinleni=reflength-craltendi;
+
+					leftAndRightRepeats = chRepAr(
+							reference, maxwinleni, 
+							craltstarti, craltendi);
+					
+					leftrepeatsvc   = leftAndRightRepeats.get(0);
+					rightrepeatsvc  = leftAndRightRepeats.get(1);
+					combinedrepeats = leftAndRightRepeats.get(2);
+					
+					System.out.println(craltstarti + "\n" + reference + "\n" + maxwinleni + "\n" + leftrepeatsvc.size() + "\n" + rightrepeatsvc.size() + "\n" + combinedrepeats.size());
+					//System.out.println("\n" + craltline);
+					//cumures="";
+					
+					for(int j=0; j<combinedrepeats.size(); j++)
+					{
+//						System.out.println(combinedrepeats.get(j));
+						crcombined=combinedrepeats.get(j);
+						crcombined = retrievePhase(crcombined);
+//						System.out.println(crcombined);
+						String[] wcds = crcombined.split("-");
+						
+						if( wcds[2].contains("l") ||  wcds[2].contains("r"))
+						{	
+						
+							combtrans="";
+							if(crcombined.contains("trans"))
+								combtrans="trans";
+							String[] words1 = crcombined.split("-");
+							crleftreptot=words1[0];
+							crrightreptot=words1[1];
+							String[] words1l=  crleftreptot.split("_");
+							crleftrep = words1l[0];
+							crleftreplen=crleftrep.length();
+							String[] words1r= crrightreptot.split("_");
+							crrightrep=words1r[0];
+							crrightreplen=crrightrep.length();
+						
+//			case when craltstarti-crleftreplen < 0
+							if(craltstarti-crleftreplen<0)
+								leftborder =reference.substring(0,craltstarti);
+							else	
+								leftborder =reference.substring(craltstarti-crleftreplen,craltstarti);
+
+//			case when craltstarti+crrightreplen > reference.length
+							if(craltstarti+crrightreplen>reference.length())
+								rightborder=reference.substring(craltstarti,reference.length());
+							else
+								rightborder=reference.substring(craltstarti,craltstarti+crrightreplen);
+						
+							//System.out.println(buildSpaceString(ref.substring(0,craltstarti-crleftreplen).length()) + leftborder);
+							//System.out.println(buildSpaceString(ref.substring(0,craltstarti).length()) + rightborder);
+
+							if(cralttruefalse.equals("true"))
+							{
+								leftbordermatch=true;
+								rightbordermatch=true;
+							}
+							if(cralttruefalse.equals("false"))
+							{
+								leftbordermatch=false;
+								rightbordermatch=false;
+							}
+
+							ide = RetrieveIde(crcombined, craltstarti);	
+							//System.out.print(crcombined + " " + ide);
+						
+//							System.out.println(crcombined + " " + cralt + " " + leftborder + " " + rightborder + " " + leftbordermatch + " " + rightbordermatch + " " + type + " " + combtrans + " " + ide);
+							crresult="";
+							//System.out.print(crcombined + " " + ide + " " + cralt + " " + leftborder + " " + rightborder + " " + type) ;
+							crresult = lefToRighAndRightToLeft(crcombined, cralt, 
+									leftborder, rightborder, 
+									leftbordermatch, rightbordermatch, 
+									type, combtrans, ide);
+						
+							//System.out.println(" &&&&&&&&&&&&&&& " + crresult);
+							//if(!(crresult.isEmpty()))
+							{
+								cumures = cumures + crresult;
+								System.out.println(crcombined + " " + ide + " " + cralt + " " + 
+										leftborder + " " + rightborder + " " + type + " " + 
+										crresult);
+							}
+						//System.out.println(cumures);
+						}
+					}
+
+				}
+				
+				if(cumures.length()>1)
+				{
+					cumures = reOrientTheResults(cumures, leftrepeatsvc, rightrepeatsvc);
+					cumures = removedoublicates(cumures, delimiter);
+					cumures = changedelimiter(cumures, ",", "|");
+					cumures = cumures + ":R";
+					//System.out.println(simplerepinfo);
+				}
+				else
+					cumures = "n&n:U";
+				
+				cumulindelres = cumulindelres + crindtot + ":" + cumures + ",";
+			}
+			idlcntplmatch = cumulindelres;
+		}
+		else if(type.equals("dls"))
+		{
+			indstarti=posindex;
+		
+			String[] inswds = idlcntplmatch.split(",");
+			for(int r=0; r<inswds.length; r++)
+			{
+				
+				crindtot=inswds[r];
+				System.out.println("\n\ntotal deletion " + crindtot);
+				String[] instotwds = crindtot.split("@");
+				crindancnt=instotwds[0];
+				crindel="";
+				for(int in=0; in<crindancnt.length(); in++)
+				{
+					if(!(Character.isDigit(crindancnt.charAt(in))))
+					crindel = crindel + crindancnt.charAt(in);
+					else
+						break;
+				}
+				crindellen = crindel.length();
+				indendi=indstarti + crindellen;
+					// -1;
+				System.out.println("deletion : " + crindel);
+				
+				refleftpart = reference.substring(0, posindex);
+				refrightpart = reference.substring(indendi, reflength);
+//-->
+				spaces = buildSpaceString(refleftpart.length());
+//-->
+				System.out.println("Left  Part : " + refleftpart);
+				System.out.println("INDEL("+type+")"+" : " + spaces + crindel);
+				System.out.println("Right Part : " + spaces + refrightpart + "\n");
+				//repeatsvector=new Vector<String>();
+				
+//			calculate maximum window
+				if(maxwinleni==0)
+				{
+					if(indstarti<reflength-indendi)
+						maxwinleni=indstarti;
+						//maxwinleni=indstarti+1;
+					else if(indstarti>=reflength-indendi)
+						maxwinleni=reflength-indendi;
+				}
+
+				//System.out.println(" -- max len = " + maxwinleni);
+//			calculate maximum window
+				
+//				retrieve repeats arround initial step
+//				in chRepAr method if indend+maxwinleni>reflength all returned vectors are empty
+//				leftAndRightRepeats = chRepAr(reference, maxwinleni, indstarti, indendi);
+				leftAndRightRepeats = chRepAr(reference, maxwinleni, indstarti, indstarti);
+
+
+				leftrepeatsvc = leftAndRightRepeats.get(0);
+				rightrepeatsvc = leftAndRightRepeats.get(1);
+				combinedrepeats = leftAndRightRepeats.get(2);
+				
+
+				System.out.println("rep start");
+				System.out.println();
+				for(int rf=0; rf<combinedrepeats.size(); rf++)
+					System.out.println(combinedrepeats.get(rf));
+				System.out.println("rep end\n");
+
+				for(int i=0; i<leftrepeatsvc.size(); i++)
+					allRepeatsvc.add(leftrepeatsvc.get(i));
+				for(int i=0; i<rightrepeatsvc.size(); i++)
+					allRepeatsvc.add(rightrepeatsvc.get(i));	
+/*
+				shifts = findIndelShifts(leftrepeatsvc, rightrepeatsvc);
+//				example : shifts l r : 2 1
+
+				String[] shiftwds = shifts.split(" ");
+				shiftlefti =Integer.parseInt(shiftwds[0]);
+				shiftrighti=Integer.parseInt(shiftwds[1]);
+				if (indstarti + shiftrighti>=reflength)
+					shiftrighti=reflength-indstarti;
+				if(indstarti-shiftlefti<0)
+				shiftlefti = indstarti;
+				//System.out.println(shiftlefti + " " + shiftrighti);
+
+				alternativeIndels = retrieveAllAlternIndels(
+						reference, crindel, type,
+						indstarti, shiftlefti, 
+						shiftrighti);
+			//	for(int i=0; i<alternativeIndels.size(); i++)
+			//		System.out.println(alternativeIndels.get(i));
+				alternativeIndels = discardDislocatedForms(alternativeIndels, allRepeatsvc);
+				//System.out.println();
+				for(int i=0; i<alternativeIndels.size(); i++)
+				{
+					String[] wds = alternativeIndels.get(i).split("_");
+				//	System.out.println(alternativeIndels.get(i));
+					if(wds[2].equals("false"))
+					{
+						alternativeIndels.removeElementAt(i);
+						i=i-1;
+					}
+				}				
+				
+				System.out.println("\n");
+				for(int i=0; i<alternativeIndels.size(); i++)
+					System.out.println(alternativeIndels.get(i));
+				System.out.println();
+*/				
+//				cumuresult="", crcombined="", leftborder="", rightborder="",
+//				crleftreptot="", crrightreptot, crleftrep="", crrightrep="", ide="", cumures=""; 
+
+				cumures="";
+				craltline =  indstarti + "_" + crindel + "_true";
+						//alternativeIndels.get(i);
+				String[] altwds = craltline.split("_");
+				craltstart        = altwds[0];
+				cralt           = altwds[1];
+				cralttruefalse  = altwds[2];
+				craltstarti       = Integer.parseInt(craltstart);
+				crindlen        = cralt.length();
+				//if(type.equals("dls"))
+				craltendi=craltstarti + crindlen-1;
+
+				if(craltstarti<reflength-craltendi)
+					maxwinleni=craltstarti;
+				else if(craltstarti>=reflength-craltendi)
+					maxwinleni=reflength-craltendi;
+//////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////
+//				System.out.println( craltstarti + " " + craltendi);
+//				leftAndRightRepeats = chRepAr(
+//						reference, maxwinleni, 
+//						craltstarti, craltendi);
+//////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////
+ 
+//				leftrepeatsvc   = leftAndRightRepeats.get(0);
+//				rightrepeatsvc  = leftAndRightRepeats.get(1);
+//				combinedrepeats = leftAndRightRepeats.get(2);
+					
+				System.out.println(craltstarti + "\n" + reference + "\n" + maxwinleni + "\n" + leftrepeatsvc.size() + "\n" + rightrepeatsvc.size() + "\n" + combinedrepeats.size());
+				//System.out.println("\n" + craltline);
+				//cumures="";
+					
+				for(int j=0; j<combinedrepeats.size(); j++)
+				{
+//					System.out.println(combinedrepeats.get(j));
+					crcombined=combinedrepeats.get(j);
+					crcombined = retrievePhase(crcombined);
+//					System.out.println(crcombined);
+					String[] wcds = crcombined.split("-");
+						
+					if( wcds[2].contains("l") ||  wcds[2].contains("r"))
+					{	
+						
+						combtrans="";
+						if(crcombined.contains("trans"))
+							combtrans="trans";
+						String[] words1 = crcombined.split("-");
+						crleftreptot=words1[0];
+						crrightreptot=words1[1];
+						String[] words1l=  crleftreptot.split("_");
+						crleftrep = words1l[0];
+						crleftreplen=crleftrep.length();
+						String[] words1r= crrightreptot.split("_");
+						crrightrep=words1r[0];
+						crrightreplen=crrightrep.length();
+						
+
+//			case when craltstarti-crleftreplen < 0
+						if(craltstarti-crleftreplen<0)
+							leftborder =reference.substring(0,craltstarti);
+						else	
+							leftborder =reference.substring(craltstarti-crleftreplen,craltstarti);
+
+//			case when craltstarti+crrightreplen > reference.length
+						if(craltendi+1+crrightreplen>reference.length())
+							rightborder=reference.substring(craltendi+1,reference.length());
+						else
+							rightborder=reference.substring(craltendi+1,craltendi+1+crrightreplen);
+
+						if(craltstarti-crleftreplen<0)
+							leftborder =reference.substring(0,craltstarti);
+						else
+							leftborder =reference.substring(craltstarti-crleftreplen,craltstarti);
+
+
+						
+						//System.out.println(buildSpaceString(ref.substring(0,craltstarti-crleftreplen).length()) + leftborder);
+						//System.out.println(buildSpaceString(ref.substring(0,craltstarti).length()) + rightborder);
+
+						if(cralttruefalse.equals("true"))
+						{
+							leftbordermatch=true;
+							rightbordermatch=true;
+						}
+						if(cralttruefalse.equals("false"))
+						{
+							leftbordermatch=false;
+							rightbordermatch=false;
+						}
+
+						ide = RetrieveIde(crcombined, craltstarti);	
+						//System.out.print(crcombined + " " + ide);
+						
+//						System.out.println(crcombined + " " + cralt + " " + leftborder + " " + rightborder + " " + leftbordermatch + " " + rightbordermatch + " " + type + " " + combtrans + " " + ide);
+						crresult="";
+						//System.out.print(crcombined + " " + ide + " " + cralt + " " + leftborder + " " + rightborder + " " + type) ;
+						crresult = lefToRighAndRightToLeft(crcombined, cralt, 
+									leftborder, rightborder, 
+									leftbordermatch, rightbordermatch, 
+									type, combtrans, ide);
+						
+						//System.out.println(" &&&&&&&&&&&&&&& " + crresult);
+						//if(!(crresult.isEmpty()))
+						{
+							cumures = cumures + crresult;
+							System.out.println(crcombined + " " + ide + " " + cralt + " " + 
+									leftborder + " " + rightborder + " " + type + " " + 
+									crresult);
+						}
+						//System.out.println(cumures);
+					}
+				}
+
+			}
+				
+			for(int rf=0; rf<leftrepeatsvc.size(); rf++)
+			{
+				crrrrep = leftrepeatsvc.get(rf);
+				//System.out.println(crrrrep);
+				String[] hwds = crrrrep.split("_");
+				if(hwds[hwds.length-1].contains("l"))
+				{
+					//indendi=indstarti
+					if
+					(	hwds[0].equals(crindel) && 
+						Integer.parseInt(hwds[1])<indstarti &&
+						Integer.parseInt(hwds[2])>=indendi &&
+						cumures.length()<=1
+					)
+					cumures = crindel + "d1&n";
+				}
+					
+
+			}
+			System.out.println();
+
+			for(int rf=0; rf<rightrepeatsvc.size(); rf++)
+			{
+					
+				crrrrep = rightrepeatsvc.get(rf);
+				//System.out.println(crrrrep);
+				String[] hwds = crrrrep.split("_");
+				if(hwds[hwds.length-1].contains("r"))
+				{
+				//indendi=indstarti
+					if
+					(	
+						hwds[0].equals(crindel) && 
+						Integer.parseInt(hwds[2])>indendi && 
+						Integer.parseInt(hwds[1])<=indstarti &&
+						cumures.length()<=1
+					)
+					cumures = "n&"+crindel+"d1";
+				}
+
+			}
+			if(cumures.length()>1)
+			{
+				cumures = reOrientTheResults(cumures, leftrepeatsvc, rightrepeatsvc);
+				cumures = removedoublicates(cumures, delimiter);
+				cumures = changedelimiter(cumures, ",", "|");
+				cumures = cumures + ":R";
+				//System.out.println(simplerepinfo);
+			}
+			else
+				cumures = "n&n:U";
+			cumulindelres = cumulindelres + crindtot + ":" + cumures + ",";
+	
+			idlcntplmatch = cumulindelres;
+
+		}			
+		System.out.println(idlcntplmatch);
+		return idlcntplmatch;
+	}
+
+	
+	public static String lefToRighAndRightToLeft
+	(
+			String leftrightreps, 
+			String indel,
+			String leftborder,
+			String rightborder,
+			boolean leftbordermatch, 
+			boolean rightbordermatch, 
+			String type, String trns, String ide)
+	{
+//		System.out.println("&& " + leftrightreps + " &&");
+		boolean solutionfound  = false;
+		boolean rightiszero    = false;
+		boolean leftiszero     = false;
+		boolean leftoveride_n  = false;
+		boolean rightoveride_n = false;
+	//	System.out.println("Hi");
+		String indelrepeatcombination = "";
+		String results="";
+		String cmres="";
+		String	crlfreptot="", crlefrep="", crlstart="", crlend="",
+				crrireptot="", crrigrep="", crrstart="", crrend="",
+				rightrepcm="", checkwhps="", resultedrepsec="",
+				leftrepcm="", delimiter=",", simplerepinfo="";
+		int lefint=0, rigint=0, a1=0, a2=0, b1=0, b2=0, laddcnt=0, raddcnt=0, lefcountr=0;
+		String cmlrep="", cmrrep="", chckltrsub="", chckltradd="",
+				chckrtlsub="", chckrtladd="", chckrtladdsub="";
+
+
+		String indelwithborders="";
+		indelwithborders = leftborder + indel + rightborder;
+
+		String[] lrrep = leftrightreps.split("-");
+		results = lrrep[0] + " " + lrrep[1];
+		if(lrrep[2].contains("l"))
+			leftoveride_n =true;
+		if(lrrep[2].contains("r"))
+			rightoveride_n =true;
+		//System.out.println("\nLeftToRightAndRightToLeft : " + leftrightreps);
+		//System.out.println("--> " + indelwithborders + " <--");
+		cmlrep="";
+		crlfreptot = lrrep[0];
+		if(!crlfreptot.equals("0"))
+		{
+			String[] lrpwds = crlfreptot.split("_");
+			crlefrep = lrpwds[0];  // left repeat
+			crlstart = lrpwds[1];
+			crlend   = lrpwds[2];
+		}
+		else
+			leftiszero=true;
+		
+		crrireptot = lrrep[1];
+		if(!crrireptot.equals("0"))
+		{
+			String[] rrpwds = crrireptot.split("_");
+			crrigrep = rrpwds[0];  // right repeat
+			crrstart = rrpwds[1];
+			crrend   = rrpwds[2];
+		}
+		else
+			rightiszero=true;
+		
+		//System.out.println(crlefrep + " <> " + crrigrep);
+		if(!leftiszero)
+			lefint = indelwithborders.length()/crlefrep.length();
+		if(!rightiszero)
+			rigint = indelwithborders.length()/crrigrep.length();
+
+		if(solutionfound==false && !leftiszero)
+		{
+			for(int j=0; j<lefint; j++)
+			{
+				cmlrep = cmlrep + crlefrep;
+				// leftborder + leftrepeatXtimes + right border
+				chckltrsub = leftborder + cmlrep + rightborder;
+//						example:
+//				AT-TT
+//				AT-AT-TT ad first midle AT
+//				bb  ATA bb and substract one T from right border
+//				AT-ATAT-(T)T, -> AT-ATA T-T -> AT-ATA-TT  				
+				chckltradd = leftborder + cmlrep + rightborder;
+					//System.out.println("----- " + chckltradd);
+				// next we construct the indel with borders using only left repeat
+				if(chckltrsub.equals(indelwithborders) && leftbordermatch && trns.isEmpty())
+				{
+					if(ide.equals("b") || ide.equals("l") || leftoveride_n)
+					{
+						results=" " + crlefrep + " left rep times : " + (j+1);
+						cmres = cmres + crlefrep + "i" + (j+1) + "&n" +",";
+						//System.out.println("--------- " + results);
+						indelrepeatcombination = "ins-none";
+					}
+					else
+					{
+						System.out.println(cmres + crlefrep + "i" + (j+1) + "&n" + " discarded");
+						solutionfound=true;
+						break;
+					}
+				}
+				else if(chckltrsub.equals(indelwithborders) && leftbordermatch && trns.equals("trans"))
+				{
+					results=" " + crlefrep + " left rep times : " + (j+1);
+					cmres = cmres + "n&" + crlefrep + "i" + (j+1) + ",";
+					//System.out.println("--------- " + results);
+					indelrepeatcombination = "invs-ins-none";
+						
+					solutionfound=true;
+					break;	
+				}
+				if(solutionfound==false && !rightiszero)
+				{
+					// add in currep left 
+					if(chckltrsub.length()>=indelwithborders.length())
+					{
+						//System.out.println("Hi + " + chck1tr);
+						rightrepcm="";
+						for(int k=0; k<=rightborder.length()-crrigrep.length(); k += crrigrep.length())
+						{
+							rightrepcm = rightrepcm + crrigrep;
+							a1 = chckltrsub.length()-rightborder.length();
+							a2 = chckltrsub.length()-rightborder.length() + rightrepcm.length();
+							checkwhps = chckltrsub.substring(a1, a2);
+							//System.out.println("%%%%% " + checkwhps);
+							if (chckltrsub.substring(a1, a2).equals(rightrepcm))
+							{
+								//System.out.println(rightrepcm + " () " + checkwhps);
+								resultedrepsec = chckltrsub.substring(0, a1) + chckltrsub.substring(a2, chckltrsub.length());
+								//and substract one T at a time from right border
+								if(resultedrepsec.equals(indelwithborders) && leftbordermatch && trns.isEmpty())
+								{
+									indelrepeatcombination = "ins-del";
+									results=resultedrepsec + " " + crlefrep + 
+										" left rep times : " + (j+1) + " " + 
+										crrigrep + " right repeat del times : " + 
+										(k+1) + "\n" + indelrepeatcombination;
+										
+									cmres = cmres + crlefrep + "i" + (j+1) + "&" + crrigrep + "d" + (k+1) + ",";
+									//System.out.println(results);
+									//System.exit(0);
+									break;
+								}
+								else if(resultedrepsec.equals(indelwithborders) && leftbordermatch && trns.equals("trans"))
+								{
+									indelrepeatcombination = "invs-ins-del";
+									results=resultedrepsec + " " + crlefrep + 
+										" left rep times : " + (j+1) + " " + 
+										crrigrep + " right repeat del times : " + 
+										(k+1) + "\n" + indelrepeatcombination;
+									cmres = cmres + crrigrep + "d" + (k+1) + "&" + crlefrep + "i" + (j+1) + ",";
+									//System.out.println(results);
+									//System.exit(0);
+									break;
+								}
+							}
+						}
+					}
+
+					rightrepcm="";
+					raddcnt=0;
+						/*
+						if(chckltradd.length()<indelwithborders.length())
+						{
+							
+				
+							for(int k=chckltradd.length(); k<indelwithborders.length(); k += crrigrep.length())
+							{
+								raddcnt = raddcnt + 1;
+								rightrepcm = rightrepcm + crrigrep;
+								chckltradd = chckltradd + rightrepcm;
+								if(chckltradd.equals(indelwithborders) && trns.isEmpty())
+								{
+									indelrepeatcombination = "ins-ins";
+									results=resultedrepsec + " " + crlefrep + 
+											" left rep times : " + (j+1) + " " + 
+											crrigrep + " right repeat times : " + 
+											(raddcnt) + "\n" + indelrepeatcombination;
+									//cmres = cmres + crlefrep + "i" + (j+1) + "&" + crrigrep + "i" + (raddcnt+1) + ",";
+									cmres = cmres + crlefrep + "i" + (j+1) + "&" + crrigrep + "i" + (raddcnt) + ",";
+									System.out.println(chckltradd + "\n" + indelwithborders +  " -- ++ " + cmres);
+								}
+								if(chckltradd.equals(indelwithborders) && trns.equals("trans"))
+								{
+									indelrepeatcombination = "invs-ins-ins";
+									results=resultedrepsec + " " + crlefrep + 
+											" left rep times : " + (j+1) + " " + 
+											crrigrep + " right repeat times : " + 
+											(raddcnt+1) + "\n" + indelrepeatcombination;
+									cmres = cmres + crrigrep + "i" + (raddcnt) + "&" + crlefrep + "i" + (j+1)  + ",";
+								}
+								
+								
+							}
+							
+						}
+						*/
+					}
+				}
+			}
+		
+		
+		
+//			Increment from right repeat if there is one
+//			for example T TT TTT TTTT ....		
+		if(solutionfound==false && !rightiszero)
+		{
+			
+			cmrrep="";
+			for(int j=0; j<rigint; j++)
+			{
+				cmrrep = cmrrep + crrigrep;
+				/// leftborder + leftrepeatXtimes + right border
+				chckrtlsub = leftborder + cmrrep + rightborder; // crete and then subtract from borders
+				// example:
+//				AT-TT
+//				AT-AT-TT ad first midle AT
+//				bb  ATA bb and substract one T from border
+//				AT-ATAT-(T)T, -> AT-ATA T-T -> AT-ATA-TT   
+				chckrtladd = leftborder + cmrrep + rightborder; // create and then add to reach borders
+				chckrtladdsub = cmrrep + rightborder;
+				// System.out.println("----- " + chck1tr);
+			//	System.out.println(chckrtlsub + " ----- " + indelwithborders);
+				if(chckrtlsub.equals(indelwithborders) && trns.isEmpty())
+				{
+					indelrepeatcombination = "none-ins";
+					results=" " + crrigrep + " right rep times : " + (j+1) + 
+							"\n" + indelrepeatcombination;
+					//System.out.println(results);
+	// ===============
+	// ===============					
+	// ===============				
+					if(ide.equals("b") || ide.equals("r") || rightoveride_n)
+					{
+						cmres = cmres + "n&" + crrigrep + "i" + (j+1) + ",";
+					}
+//					else
+//					{
+//						System.out.println(cmres + "n&" + crrigrep + "i" + (j+1) + " discarted");
+//					}
+					solutionfound=true;
+					break;	
+				}
+	// ===============
+	// ===============					
+	// =============== 			
+				else if(chckrtlsub.equals(indelwithborders) && trns.equals("trans"))
+				{
+					indelrepeatcombination = "invs-none-ins";
+					results=" " + crrigrep + " right rep times : " + (j+1) + 
+							"\n" + indelrepeatcombination;
+					//System.out.println(results);
+					cmres = cmres + crrigrep + "i" + (j+1) + "&n" + ",";
+
+					solutionfound=true;
+					break;	
+				}
+				if(solutionfound==false && !leftiszero)
+				{
+
+//				add in currep left
+					if(chckrtlsub.length()>=indelwithborders.length())
+					{
+						//System.out.println("Hi + " + chck1tr);
+						leftrepcm="";
+//						for(int k=0; k<rightborder.length()-crrigrep.length(); k += crrigrep.length())
+						lefcountr=-1;
+						for(int k=leftborder.length(); k>0; k -= crlefrep.length())
+						{
+							leftrepcm = leftrepcm + crlefrep;
+							lefcountr = lefcountr + 1;
+							a2 = leftborder.length()-lefcountr*crlefrep.length() + rightrepcm.length();
+							a1 = a2-crlefrep.length();
+						//	System.out.println(lefcountr + " " + a1 + " " + a2);
+							//a2 = chckltrsub.length()-rightborder.length() + rightrepcm.length();
+							checkwhps = chckrtlsub.substring(a1, a2);
+							//System.out.println(leftrepcm + " () " + checkwhps);
+							
+							if (chckrtlsub.substring(a1, a2).equals(leftrepcm))
+							{
+							//	System.out.println(leftrepcm + " () " + checkwhps);
+								if(a1!=0)
+									resultedrepsec = chckltrsub.substring(0, a1) + chckrtlsub.substring(a2, chckrtlsub.length());
+								else if(a1==0)
+									resultedrepsec = chckrtlsub.substring(a2, chckrtlsub.length());
+								
+								if(resultedrepsec.equals(indelwithborders) && trns.isEmpty())
+								{
+									indelrepeatcombination = "del-ins";
+									results=resultedrepsec + " " + crlefrep + 
+											" left rep del times : " + (lefcountr+1) + " " + crrigrep + 
+											" right repeat ins times : " + (j+1) + "\n" + 
+											indelrepeatcombination;
+									cmres = cmres + crlefrep + "d" + (lefcountr+1) + "&" + crrigrep + "i" + (j+1) + ",";
+								
+									//System.out.println(results);
+									//System.exit(0);
+									break;
+								}
+								if(resultedrepsec.equals(indelwithborders) && trns.equals("trans"))
+								{
+									indelrepeatcombination = "invs-del-ins";
+									results=resultedrepsec + " " + crlefrep + 
+											" left rep del times : " + (lefcountr+1) + " " + crrigrep + 
+											" right repeat ins times : " + (j+1) + "\n" + 
+											indelrepeatcombination;
+									cmres = cmres + crrigrep + "i" + (j+1) + "&" + crlefrep + "d" + (lefcountr+1) + ",";
+								
+									//System.out.println(results);
+									//System.exit(0);
+									break;
+								}
+							}
+						}
+					}
+
+					leftrepcm="";
+					laddcnt=0;
+					if(chckrtladd.length()<indelwithborders.length() && leftbordermatch)
+					{
+						//System.out.println("Hi!!!!!!");
+						for(int k=chckrtladd.length(); k<indelwithborders.length(); k += crlefrep.length())
+						{
+							laddcnt = laddcnt + 1; // counter for times adding left 
+							//repeat in right allready added repeats
+							// leftrepcm = leftrepcm + crlefrep; proportional adding left repeat
+							// System.out.println(leftrepcm);
+							chckrtladdsub = crlefrep + chckrtladdsub; // create comlex repeat core with right border only 
+							chckrtladd = leftborder + chckrtladdsub;  // add left border
+							// System.out.println("ooo " + chckrtladd);
+							if(chckrtladd.equals(indelwithborders) && trns.isEmpty()) // check if the generated string
+							// is equal with the initial indel with both borders.
+							{
+								indelrepeatcombination = "ins-ins";
+								results=chckrtladd + " " + crlefrep + 
+										" left rep times : " + 
+								(laddcnt) + " " + crrigrep + 
+								" right repeat times : " + (j+1) + 
+								"\n" + indelrepeatcombination;
+								cmres = cmres + crlefrep + "i" + (laddcnt) + "&" + crrigrep + "i" + (j+1) + ",";
+
+								//System.out.println(results);
+								
+								solutionfound=true;
+								break;
+							}
+							if(chckrtladd.equals(indelwithborders) && trns.equals("trans")) // check if the generated string
+							{
+								indelrepeatcombination = "invs-ins-ins";
+								results=chckrtladd + " " + crlefrep + 
+										" left rep times : " + 
+								(laddcnt) + " " + crrigrep + 
+								" right repeat times : " + (j+1) + 
+								"\n" + indelrepeatcombination;
+								cmres = cmres + crrigrep + "i" + (j+1) + "&" +  crlefrep + "i" + (laddcnt) + ",";
+
+								//System.out.println(results);
+								
+								solutionfound=true;
+								break;
+							}
+								
+						}
+					}
+				}
+			}
+		}
+		//System.out.println(indelrepeatcombination);
+		if( !(cmres.isEmpty()))
+				cmres = removedoublicates(cmres, delimiter);
+		if(type.equals("dls"))
+		{
+			cmres = cmres.replace("i", "D");
+			cmres = cmres.replace("d", "I");
+			cmres = cmres.replace("I", "i");
+			cmres = cmres.replace("D", "d");
+		}
+		return cmres;
+	}
+	
+	
+	public static String retrievePhase(String leftrightreps)
+	{
+		String resphase = "", result="";
+		String lefttot="", righttot="", 
+		leftrep="", leftrepstart="", leftrepend="", indelstart="", indelend="", 
+		rightrep="", rightrepstart="", rightrepend="", leftaux="";
+		
+		
+		int leftrepstarti=0, leftrependi=0, leftlen=0,
+		rightrepstarti=0, rightrependi=0, rightlen=0,
+		indelstarti=0, indelendi=0;
+		
+		boolean leftinphase=false, rightinphase=false,
+				istrans=false;
+		
+		if(leftrightreps.contains("trans"))
+			istrans=true;
+		
+		String[] wrds = leftrightreps.split("-");
+
+		if(istrans)
+		{
+			lefttot=wrds[1]; 
+			righttot=wrds[0];
+		}
+		else
+		{
+			lefttot=wrds[0]; 
+			righttot=wrds[1];
+		}
+		
+		lefttot=wrds[0]; righttot=wrds[1];
+		String[] wrdsl = lefttot.split("_");
+		String[] wrdsr = righttot.split("_");
+		
+
+		if(wrdsl.length>=5)
+		{
+			leftrep=wrdsl[0];
+			leftlen=leftrep.length();
+			leftrepstart=wrdsl[1];
+			leftrepend=wrdsl[2];
+			leftrepstarti=Integer.parseInt(leftrepstart);
+			leftrependi=Integer.parseInt(leftrepend);
+			indelstart=wrdsl[3];
+			indelend=wrdsl[4];
+			indelstarti = Integer.parseInt(indelstart);
+			indelendi = Integer.parseInt(indelend);
+
+			if (indelstarti==leftrependi)
+				leftinphase=true;
+			if(!leftinphase)
+			{
+				for(int j=leftrepstarti-1; j<=leftrependi; j+=leftlen)
+				{
+					
+					//System.out.println(j);
+					if(j==indelstarti)
+					{
+						leftinphase=true;
+						break;
+					}
+				}
+			}
+		}
+		
+		if(wrdsr.length>=5)
+		{
+			rightrep=wrdsr[0];
+			rightlen=rightrep.length();
+			
+			rightrepstart=wrdsr[1];
+			rightrepend=wrdsr[2];
+			indelstart=wrdsr[3];
+			indelend=wrdsr[4];
+			
+			rightrepstarti=Integer.parseInt(rightrepstart);
+			rightrependi=Integer.parseInt(rightrepend);
+			indelstarti = Integer.parseInt(indelstart);
+			indelendi = Integer.parseInt(indelend);
+			rightinphase=false;
+			if (indelstarti==rightrepstarti-1)
+				rightinphase=true;
+			if(!rightinphase)
+			{
+				for(int j=rightrepstarti-1; j<=rightrependi; j+=rightlen)
+				{
+					
+					//System.out.println(j);
+					if(j==indelstarti)
+					{
+						rightinphase=true;
+						break;
+					}
+				}
+			}
+		}		
+
+		if(leftinphase && rightinphase)
+			resphase="lrp";
+//			System.out.println("lrp");
+		if(leftinphase && !rightinphase)
+			resphase="lp";
+//			System.out.println("lp");
+		if(!leftinphase && rightinphase)
+			resphase="rp";
+//			System.out.println("rp");
+		if(!leftinphase && !rightinphase)
+			resphase="np";
+//			System.out.println("np");
+		//System.out.println(resphase);
+// 		return result;
+		
+		result = leftrightreps + "-" + resphase;
+		//System.out.println(result);
+		return result;
+	}
+	
+	public static String RetrieveIde(String crecmb, int inscrposi)
+	{
+		String 	ide="", combtrans="", crlrp="", 
+				crrepstartl="", crrependl="", crrrp="", 
+				crrepstartr="", crrependr="";
+		
+		int crrepstartli=0, crrepstartri=0, crrependri=0, 
+				crrependli=0;
+		
+		boolean leftbordermatch = false, rightbordermatch = false;
+			
+		String[] wds1 = crecmb.split("-");
+		String[] wds1l = wds1[0].split("_");
+		String[] wds1r = wds1[1].split("_");
+		if(wds1.length==3)
+				combtrans=wds1[2];
+		
+		crlrp=wds1l[0];
+		if(wds1l.length>=3)
+		{
+			crrepstartl=wds1l[1];
+			crrepstartli=Integer.parseInt(crrepstartl);
+			crrependl=wds1l[2];
+			crrependli=Integer.parseInt(crrependl);
+		}
+		crrrp=wds1r[0];
+		if(wds1r.length>=3)
+		{
+			crrepstartr=wds1r[1];
+			crrepstartri = Integer.parseInt(crrepstartr);
+			crrependr=wds1r[2];
+			crrependri=Integer.parseInt(crrependr);							
+		}
+		
+//		System.out.println(crrepstartli + " " + crrependli);
+//		System.out.println(crrepstartri + " " + crrependri);
+		
+		if(wds1.length!=3)
+		{
+			if(Math.abs(crrependli-inscrposi)<=1 && 
+				Math.abs(crrepstartri-inscrposi)<=1 )
+				ide="b";
+			if(Math.abs(crrependli-inscrposi)>1 && 
+				Math.abs(crrepstartri-inscrposi)<=1)
+				ide="r"; //right sosto
+			if(Math.abs(crrependli-inscrposi)<=1 && 
+				Math.abs(crrepstartri-inscrposi)>1)
+				ide="l"; // left sosto
+			if(Math.abs(crrependli-inscrposi)>1 && 
+				Math.abs(crrepstartri-inscrposi)>1)
+				ide="n"; // kanena sosto
+			}
+			else if(wds1.length==3)
+			{
+				if(Math.abs(crrependri-inscrposi)>1 && 
+					Math.abs(crrepstartli-inscrposi)<=1)
+					ide="r"; // left sosto pu itane right
+				if(Math.abs(crrepstartli-inscrposi)>1 && 
+					Math.abs(crrependri-inscrposi)<=1)
+					ide="l"; // right sosto pu itane left
+
+			else if(Math.abs(crrepstartli-inscrposi)>1 && 
+					Math.abs(crrependri-inscrposi)>1)
+				ide="n";
+		}
+			return ide;
+	}
+	
+	
+	public static String reOrientTheResults(String cumures, Vector<String> leftrepeats, Vector<String> rightrepeats)
+	{
+		String results="";
+		
+		//for (int i=0; i<leftrepeats.size(); i++)
+		//	System.out.println(leftrepeats.get(i));
+		//System.out.println(cumures);
+		String[] wds = cumures.split(",");
+		String 	cr="", righttot="", 
+				lefttot="", right="", 
+				left="", lrept="", 
+				rrept="", lrepq="", 
+				rrepq="", leftresult = "", 
+				rightresult="";
+		boolean found=false;
+		for(int i=0; i<wds.length; i++)
+		{
+			found=false;
+			cr = wds[i];
+			String[] wds1 = cr.split("&");
+			//System.out.println(" --- " + cr);
+			left="";
+			right="";
+			righttot="";
+			lefttot="";
+			righttot = "";
+			lefttot=wds1[0]; 
+			righttot=wds1[1];
+			//if(!(lefttot.equals("n")) && !(right.equals("n")) )
+			if(!(lefttot.equals("n")))
+			{
+				if( lefttot.contains("i") )
+				{
+					String[] wds1la=  wds1[0].split("i");
+					left = wds1la[0];
+				}
+				else if( lefttot.contains("d") )
+				{
+					String[] wds1la=  wds1[0].split("d");
+					left = wds1la[0];
+				}
+				//System.out.println("Hi 4!");
+			}
+			else
+				left="n";
+			
+			if(!(righttot.equals("n")))
+			{
+				if( righttot.contains("i") )
+				{
+					String[] wds1ra=  righttot.split("i");
+					right = wds1ra[0];
+				}
+				else if( righttot.contains("d") )
+				{
+					String[] wds1ra=  righttot.split("d");
+					right = wds1ra[0];
+				}
+				//System.out.println("Hi 3!");
+			}
+			else
+				right="n";
+		
+			for(int l=0; l<leftrepeats.size(); l++)
+			{
+				lrept= leftrepeats.get(l);
+				String[] wdlrp = lrept.split("_");
+				//lrept="", rrept="", 
+				lrepq=wdlrp[0];
+				//System.out.println(lrepq + " oooooo " + right);
+						//, rrepq="";
+				if(lrepq.equals(right))
+				{
+					wds[i] = wds1[1] + "&" + wds1[0];
+					//System.out.println(wds[i]);
+					found=true;
+					//System.out.println("Hi 2!");
+					break;
+				}
+				
+			}
+			if(!found)
+			{
+				for(int l=0; l<rightrepeats.size(); l++)
+				{
+					rrept= rightrepeats.get(l);
+					String[] wdrrp = rrept.split("_");
+					//lrept="", rrept="", 
+					rrepq=wdrrp[0];
+						//, rrepq="";
+					if(rrepq.equals(left))
+					{
+						wds[i] = wds1[1] + "&" + wds1[0];
+						//System.out.println("Hi 1!");
+						found=true;
+						break;
+					}
+				}
+			}
+		}
+		for(int i=0; i<wds.length; i++)
+			results = results + wds[i] + ",";
+//		System.out.println(results);
+		return results;
+	}
+	
+	public static String changedelimiter(String str, String olddelimiter, String newdelimiter)
+	{
+		str = str.replaceAll(olddelimiter, newdelimiter); 
+		return str;
+	}
+	
+	public static Vector<String> discardDislocatedForms
+	(Vector<String> alternativeIndels, 
+	 Vector<String> repeatsvector)
+	{
+		Vector<String> results = new Vector<String>();
+		Vector<Integer> crindeces = new Vector<Integer>();
+		String line1="", line2="", craltind="", craltsimple="", 
+				crrep="", craltstart="", 
+				crtrufalse="", crrepstart="", crrepend="";
+		int craltstarti=0, craltlength=0, 
+				crrepstarti=0, crrependi=0, craltsimplesize=0,
+				replen=0, crdiscind=0, discind=0, crps=0; 
+
+		boolean secondbreak=false, thirdbreak=false;
+
+		for(int i=0; i<alternativeIndels.size(); i++)
+		{
+			line1 = alternativeIndels.get(i);
+			String[] wds1 = line1.split("_");
+			craltstart= wds1[0];
+			craltstarti = Integer.parseInt(craltstart);
+			craltind = wds1[1];
+			craltsimple = makeSimple(craltind);
+			craltsimplesize = craltsimple.length();
+			crtrufalse=wds1[2];
+			
+			for(int j=0; j<repeatsvector.size(); j++)
+			{
+				thirdbreak=false;
+				line2 = repeatsvector.get(j);
+				String[] wds2 = line2.split("_");
+				crrep      = wds2[0];
+				crrepstart = wds2[1];
+				crrepstarti = Integer.parseInt(crrepstart);
+				crrepend   = wds2[2];
+				crrependi = Integer.parseInt(crrepend);
+				crindeces = new Vector<Integer>();
+				for(int ix=crrepstarti; ix<=crrependi; ix++)
+				{
+					crindeces.add(ix);
+				//	System.out.print(ix + " ");
+				}
+				//System.out.println();
+
+				if(craltsimple.equals(crrep))
+				{
+					replen=crrep.length();
+					//System.out.println(craltsimple + " " + crrep + " " + replen);
+					for(int k=0; k<=crindeces.size()-replen; k += replen)
+					{
+						secondbreak=false;
+						for(int l=0; l<replen-1; l++)
+						{
+							//System.out.println(crindeces.get(k+l));
+							crps=crindeces.get(k+l);
+							if(crps==craltstarti)
+							{
+								alternativeIndels.removeElementAt(i);
+								i=i-1;
+								secondbreak=true;
+								break;
+							}
+						}
+						if (secondbreak)
+						{
+							
+							thirdbreak=true;
+							break;
+						}
+					}
+					if (thirdbreak)
+						break;
+				}
+			}
+		}
+		return alternativeIndels;
+	}
+	
+	
+	public static Vector<String> retrieveAllAlternIndels(String ref, String insertion, String type, int pos, int sleft, int sright)
+	{
+		boolean shiftleftmatch  = false;
+		boolean shiftrightmatch = false;
+
+		Vector<String> results = new Vector<String>();
+		String refwithins="", newinsleft="", newinsright="",
+				rightbigreminder="", leftsmallreminder="",
+				leftbigreminder="",  rightsmallreminder="", 
+				leftbigrefpart="", rightsmallrefpart="",
+				leftsmallrefpart="", rightbigrefpart="",
+				lfrefbrd="", rgrefbrd="", lfartbrd="", 
+				rgartbrd="", spaces1="", spaces2="", shiftedins="";
+
+		int newposl=0, newposr=0, inslen=0, 
+				reflen=0, rightin=0, leftind=0,
+				cmcnter=0;
+
+		refwithins = ref.substring(0, pos) + insertion + ref.substring(pos, ref.length());
+		reflen = ref.length();
+		inslen = insertion.length();
+		
+		if(pos-sleft<0) 
+			leftind=0;
+		else
+			leftind=pos-sleft;
+
+		if(pos+sright>reflen)
+			rightin=reflen;
+		else
+			rightin=pos+sright;
+
+		for(int i=pos-sleft; i<=pos+sright; i++)
+		{
+			cmcnter=cmcnter+1;
+		//	if(i==pos)
+		//		System.out.print("pos : ");
+		//	System.out.println(i);
+
+			lfrefbrd = ref.substring(0, i);
+			rgrefbrd = ref.substring(i, ref.length());
+			spaces1 = buildSpaceString(lfrefbrd.length());
+			//System.out.println(lfrefbrd + "\n" + spaces1 + rgrefbrd);
+			lfartbrd=refwithins.substring(0,i);
+			rgartbrd=refwithins.substring(i+inslen, refwithins.length());
+			shiftedins = refwithins.substring(i,i+inslen);
+			//System.out.println(refwithins);
+			spaces1 = buildSpaceString(lfartbrd.length());
+			spaces2 = buildSpaceString(lfartbrd.length() + inslen);
+			//System.out.println(lfartbrd + "\n" + spaces1 + shiftedins + "\n" + spaces2 + rgartbrd);
+			if( lfrefbrd.equals(lfartbrd) && rgrefbrd.equals(rgartbrd) )
+				results.add(i + "_" + shiftedins + "_" + true);
+			else
+				results.add(i + "_" + shiftedins + "_" + false);
+		}
+		return results;
+	}
+
+	
+	public static String findIndelShifts(Vector<String> leftrepeats, Vector<String> rightrepeats)
+	{
+		String results = "";
+		int leftmax=1, rightmax=1, crlen=0;
+		String line="", crrepeat="";
+		
+		for(int i=0; i<leftrepeats.size(); i++)
+		{
+			line = leftrepeats.get(i);
+			String[] wds = line.split("_");
+			crrepeat = wds[0];
+			crlen=crrepeat.length();
+			if(leftmax<crlen)
+				leftmax=crlen;
+		}
+
+		for(int i=0; i<rightrepeats.size(); i++)
+		{
+			line = rightrepeats.get(i);
+			String[] wds = line.split("_");
+			crrepeat = wds[0];
+			crlen=crrepeat.length();
+			if(rightmax<crlen)
+				rightmax=crlen;
+		}
+
+//		if(leftmax>1)
+//			leftmax=leftmax-1;
+//		if(rightmax>1)
+//			rightmax=rightmax-1;
+		results = (leftmax) + " " + (rightmax);
+		//System.out.println(results);
+		return results;
+	}
+	
+	public static Vector<Vector<String>> chRepAr(
+			String ref, int maxwinleni, 
+			int indstarti, int indendi)
+	{
+		int indendri=indendi+1;
+		Vector<String> res = new Vector<String>();
+		Vector<String> leftrepeatsvc = new Vector<String>();
+		Vector<String> rightrepeatsvc = new Vector<String>();
+		Vector<String> combinedrepeats = new Vector<String>();
+		Vector<String> combinedrepeatsaux = new Vector<String>();
+		Vector<Vector<String>> leftAndRightRepeats = new Vector<Vector<String>>();
+		
+		int len =0;
+		
+		boolean leftrepiszero=false, rightrepiszero=false;
+		
+		
+		len = ref.length();
+
+		//String substr="";
+		//substr =ref.substring(indstarti,indendi+1);
+//		System.out.println("Sequence is " + ref + " maxdist = " + maxwinleni);
+		//System.out.println("Indel is " + substr);
+
+		
+		String crkey="", crvalue="";
+		Hashtable<String, String> rep_hash = new Hashtable<String, String>();
+		int lqlen=0, i=0, s=0, e=0, l=0;
+		String lq="", rep="";
+
+		if(indendi + maxwinleni>len)
+		   maxwinleni=len-indendi;
+
+
+		for (int win = 1; win <maxwinleni-win; win++)
+		{
+
+		    lq = ref.substring(indstarti - win, indendi+win+1);
+		    lqlen=lq.length();
+		  //  System.out.println(lq);
+
+		    for (i = 0; i<=lqlen-win; i++)
+		    {
+				s = indstarti - win + i;
+				e=s;
+				rep = lq.substring(i, i+win);
+				l = rep.length();
+				//if(rep.equals("TATA"))
+				//	System.out.println(rep);
+				rep = makeSimple(rep);
+				l = rep.length();
+
+				while (s - l >= 0 && ref.substring(s-l, s).equals(rep)) 
+					s -= l;
+				while (e + 2*l <= len && ref.substring(e+l, e+2*l).equals(rep) ) 
+					e += l;
+
+				e += l;
+				s++;
+
+				if (s+l-1 == e)
+					rep_hash.put(rep+"_"+ s +"_"+e, "U");
+				else
+					{
+						rep_hash.put(rep+"_"+ s +"_"+e, "R");
+						//System.out.println(lq + " " + rep + "_" + s +"_"+e);
+					}
+			    }
+		    }
+		
+
+
+		if(rep_hash!=null)
+		{
+		   // System.out.println();
+		    Enumeration<String> en = rep_hash.keys();
+		    Vector<String> repvc = new Vector<String>();
+		    String crres="";
+
+		    while (en.hasMoreElements())
+		    {
+		    	crkey = en.nextElement();
+		    	crvalue = rep_hash.get(crkey);
+		    	if(crvalue.equals("R"))
+		    	{
+		            crres = crkey;
+		            repvc.add(crres);
+//					System.out.println(crkey+ "_" + crvalue);
+		    	}
+		    }
+		
+		    repvc = RemoveComplex(repvc);
+		
+		    String 	crreptot="", crrep="", 
+		    		crrepstart="", crrepend="", 
+		    		crreslt="", reptype="";
+		    
+		    int crrepstarti=0, crrependi=0, 
+		    	crleftdif=0, crrightdif=0; 
+//			characterize repeat as :  
+//		    		l, r, lt, rt, lps, rps; 
+		    
+		    //for (i=0; i<repvc.size(); i++)
+		    	//System.out.println(repvc.get(i));
+		  
+//		    System.out.println();
+		    
+		    for(i=0; i<repvc.size(); i++)
+		    {
+		    	crreptot     = repvc.get(i);
+//		    	System.out.println(crreptot);
+		    	String[] wds = crreptot.split("_");
+		    	crrep        = wds[0];
+			    crrepstart   = wds[1];
+			    crrepend     = wds[2];
+			    crrepstarti  = Integer.parseInt(crrepstart);
+			    crrependi    = Integer.parseInt(crrepend);
+			    reptype="";
+			    
+			    if(crrepstarti<indstarti && crrependi<indstarti)
+			    	reptype=reptype+ "&l";
+			    if(crrepstarti<indstarti && crrependi>indendi)
+			    {
+			    	//System.out.println(crrependi + " " + indendi);
+			    	if(indstarti-crrepstarti>crrependi-indendi && crrependi-indendi!=0)
+			    		reptype=reptype+ "&lt";
+			    	else if(indstarti-crrepstarti<crrependi-indendi && indstarti-crrepstarti!=0)
+		    			reptype=reptype+ "&rt";
+			    }
+			    if(crrepstarti>indendi && crrependi>indendi)
+			    	reptype=reptype+ "&r";
+			    if(crrepstarti==indendi && crrependi>indendi)
+			    	reptype=reptype+ "&rpe";
+			    if(crrepstarti==indstarti && crrependi>indendi)
+			    	reptype=reptype+ "&rps";
+			    if(crrepstarti<indstarti && crrependi==indendi)
+			    	reptype=reptype+ "&lpe";
+			    if(crrepstarti<indstarti && crrependi==indstarti)
+			    	reptype=reptype+ "&lps";
+			    crreslt = crreptot + "_" + indstarti + "_" + indendi + "_" + reptype;
+
+			    if(crreslt.contains("l"))
+			    	leftrepeatsvc.add(crreslt);
+			    if(crreslt.contains("r"))
+			    	rightrepeatsvc.add(crreslt);			    
+			    res.add(crreslt);
+		    }
+	
+		    
+		    
+		    //System.out.println();
+		    res = removedoublicates(res);
+//		    for (i=0; i<res.size(); i++)
+//		    	System.out.println(res.get(i));
+		    int repleftleni=0, reprightleni=0;
+			repleftleni=leftrepeatsvc.size();
+			reprightleni=rightrepeatsvc.size();
+			
+			if(repleftleni==0)
+				leftrepiszero=true;
+			if(reprightleni==0)
+				rightrepiszero=true;
+			
+			if(!leftrepiszero && rightrepiszero)
+				for(i=0; i<repleftleni; i++)
+					combinedrepeats.add(leftrepeatsvc.get(i) + "-0");
+			if(leftrepiszero && !rightrepiszero)
+				for(i=0; i<reprightleni; i++)
+					combinedrepeats.add("0-" + rightrepeatsvc.get(i));
+			if(!leftrepiszero && !rightrepiszero)
+				for(i=0; i<repleftleni; i++)
+				for(int j=0; j<reprightleni; j++)
+				{
+					combinedrepeats.add(leftrepeatsvc.get(i) + "-" + rightrepeatsvc.get(j));
+					//System.out.println(leftrepeatsvc.get(i) + "-" + rightrepeatsvc.get(j));
+				}
+			String crln="", leftreptot="", rightreptot="", combinedinverse="";
+			for(i=0; i<combinedrepeats.size(); i++)
+			{
+				crln=combinedrepeats.get(i);
+				combinedrepeatsaux.add(crln);
+				if(crln.contains("t"))
+				{
+					crln = crln.replace("t","trans");
+					String[] wds = crln.split("-");
+					leftreptot  =  wds[0];
+					rightreptot =  wds[1];
+					combinedinverse = rightreptot + "-" + leftreptot;
+					combinedrepeatsaux.add(combinedinverse);
+				}
+//				System.out.println(combinedrepeats.get(i));
+			
+			}
+		  //  for(int k=0; k<rightrepeatsvc.size(); k++)
+		 //   	System.out.println(rightrepeatsvc.get(k));
+		}
+		   leftAndRightRepeats.add(leftrepeatsvc);
+		   leftAndRightRepeats.add(rightrepeatsvc);
+		   leftAndRightRepeats.add(combinedrepeatsaux);
+		  // System.out.println();
+		   //for(int o=0; o<combinedrepeatsaux.size(); o++)
+			//   System.out.println(combinedrepeatsaux.get(o));
+		 //  System.out.println();
+		   
+		return leftAndRightRepeats;
+	}
+	
+	public static Vector<String> RemoveComplex(Vector<String> reps)
+	{
+		String crreptot="", crrep="", crrepsimpl="";
+		
+		for (int i=0; i<reps.size(); i++)
+		{
+			crreptot = reps.get(i);
+
+			String[] wds = crreptot.split("_");
+			crrep = wds[0];
+			crrepsimpl = makeSimple(crrep);
+			if(!(crrep.equals(crrepsimpl)) )
+			{
+				//System.out.println(crrep + " " + crrepsimpl);
+				reps.remove(i);
+				i=-1;
+			}
+		}
+		return reps;
+	}
+	public static String makeSimple(String repe)
+	{
+		String rep="", tmp="";
+		boolean isRep = false;
+		int len = repe.length();
+		double ldt = (double)len/2;
+//		System.out.println(repe + "\n" + len + " " + ldt);
+		for (int i=1; i<=ldt; i++)
+		{
+		    rep = repe.substring(0,i);
+		    isRep = true;
+		    for (int j=i; j<len+(-i+1); j += i)
+			{
+		    	tmp = repe.substring(j, j+i);
+//				System.out.println(rep + "< " + tmp);
+				if (!(tmp.equals(rep)) )
+				{
+					isRep = false;
+					break;
+				}
+		    }
+
+		    if (isRep)
+		    {
+//				System.out.println(" {} " + rep);
+		    	return rep;
+		    }
+		}
+//				System.out.println(seq);
+		return repe;
+	}
+	
+	public static String removedoublicates(String cmres, String delimiter)
+	{
+		//System.out.println("Hi " + cmres + " " + cmres.length());
+		String results="";
+		Vector<String> set = new Vector<String>();
+		String[] wds = cmres.split(delimiter);
+		String cr="";
+		boolean invector = false;
+
+		for(int i=0; i<wds.length; i++)
+		{
+		
+			invector = false;
+			cr = wds[i];			
+//			System.out.println(cr);
+			for(int j=0; j<set.size(); j++)
+			{
+				if(cr.equals(set.get(j)))
+				{
+					invector=true;
+					break;
+				}
+			}
+			if(!invector)
+				set.addElement(cr);
+		}
+	
+		for(int i=0;i<set.size(); i++)
+			results=results+set.get(i) + delimiter;	
+		return results;
+	}
+	
+	
+	
+	public static Vector<String> removedoublicates(Vector<String> vc)
+	{
+//		System.out.println("Hi " + cmres + " " + cmres.length());
+		Vector<String> set = new Vector<String>();
+
+//		String[] wds = cmres.split(delimiter);
+		String cr="";
+
+		boolean invector = false;
+
+		for(int i=0; i<vc.size(); i++)
+		{
+			invector = false;
+			cr = vc.get(i);			
+//			System.out.println(cr);
+			for(int j=0; j<set.size(); j++)
+			{
+				if(cr.equals(set.get(j)))
+				{
+					invector=true;
+					break;
+				}
+			}
+			if(!invector)
+			{
+				set.addElement(cr);
+//				System.out.println("added!");
+			}
+		}
+		return set;
+	}
+	
+		
+	public static Vector<String> RetrieveIndelSet(String Indels)
+	{
+			String results="";
+			String crindel="";
+			Vector<String> indelsset = new Vector<String>();
+			String[] indlswd = Indels.split(",");
+			
+			for(int h=0; h<indlswd.length; h++)
+			{
+				crindel = indlswd[h];
+				indelsset = RetrieveIndelSetVector(indelsset, crindel);
+			}
+			return indelsset;
+	}
+
+	public static Vector<String> RetrieveIndelSetVector(Vector<String> idvc, String indel)
+	{
+			String results="";
+			String current="";
+		
+			boolean found = false;
+			for (int i=0; i<idvc.size(); i++)
+			{
+				current = idvc.get(i);
+				if(current.equals(indel))
+				{
+					found = true;
+					break;
+				}
+			}
+			if(found == false)
+				idvc.add(indel);
+			
+			return idvc;
+	}
+
+		// The followin method is used to sort a String Vector set of complex
+		// indels. It sorts them in size-ascending order
+
+	public static Vector<String> SortVectorAccordToLength(Vector<String> vc)
+	{
+			String cur="", prv="";
+			
+			for(int i=1; i<vc.size(); i++)
+			{
+				prv = vc.get(i-1);
+				cur = vc.get(i);
+				if(cur.length()<prv.length())
+				{
+					vc.set(i-1, cur);
+					vc.set(i, prv);
+					i=0;
+				}
+			}
+			
+		return vc;
+	}
+	
+	public static Vector<Vector<String>> RetrieveSortedIndelSet(Vector<String> indelset)
+	{
+		Vector<String> As = new Vector<String>();
+		Vector<String> Cs = new Vector<String>();
+		Vector<String> Ts = new Vector<String>();
+		Vector<String> Gs = new Vector<String>();
+		Vector<String> complex = new Vector<String>();
+		Vector<Vector<String>> list = new Vector<Vector<String>>();
+		Vector<String> crvect = new Vector<String>();
+		
+		boolean notpolyA  = false, 
+			notpolyC  = false,
+			notpolyT  = false,
+			notpolyG  = false,
+			notcomplex = true;
+		String curtype = "";
+		for(int i=0; i<indelset.size(); i++)
+		{
+			//System.out.print("++++ " + indelset.get(i));
+			curtype = indelset.get(i);
+			notpolyA = false; 
+			notpolyC = false;
+			notpolyT = false;
+			notpolyG = false;
+			notcomplex = true;
+			// Check for As
+			for(int j=0; j<curtype.length(); j++)
+			{
+				if(curtype.charAt(j)!='A')
+					notpolyA = true;
+				if(curtype.charAt(j)!='C')
+					notpolyC = true;
+				if(curtype.charAt(j)!='T')
+					notpolyT = true;
+				if(curtype.charAt(j)!='G')
+					notpolyG = true;
+			}
+			if(notpolyA && notpolyC && notpolyT && notpolyG)
+			{
+				notcomplex = false;
+			//	System.out.println(" This is complex.");
+			}
+			if(notpolyA==false)
+			{
+			//	System.out.println(" This is (poly)A.");
+				As.add(curtype);
+			}
+			if(notpolyC==false)
+			{
+			//	System.out.println(" This is (poly)C.");
+				Cs.add(curtype);
+			}
+			if(notpolyT==false)
+			{
+			//	System.out.println(" This is (poly)T.");
+				Ts.add(curtype);
+			}
+			if(notpolyG==false)
+			{
+			//	System.out.println(" This is (poly)G.");
+				Gs.add(curtype);
+			}
+			if(notcomplex==false)
+				complex.add(curtype);
+		}
+
+		Collections.sort(As);
+		Collections.sort(Cs);
+		Collections.sort(Ts);
+		Collections.sort(Gs);
+		// Insert simplest Indel
+/*
+		for(int inA=0; inA<As.size(); inA++)
+			As.set(inA, As.get(inA) + "-A");
+		for(int inC=0; inC<Cs.size(); inC++)
+			Cs.set(inC, Cs.get(inC) + "-C");
+		for(int inT=0; inT<Ts.size(); inT++)
+			Ts.set(inT, Ts.get(inT) + "-T");
+		for(int inG=0; inG<Gs.size(); inG++)
+			Gs.set(inG, Gs.get(inG) + "-G");
+*/
+		// Insert simplest Indel
+		for (int inA = 0; inA < As.size(); inA++)
+			As.set(inA, As.get(inA) + "-A-" + findSimplest(As.get(inA)));
+		for (int inC = 0; inC < Cs.size(); inC++)
+			Cs.set(inC, Cs.get(inC) + "-C-" + findSimplest(Cs.get(inC)));
+		for (int inT = 0; inT < Ts.size(); inT++)
+			Ts.set(inT, Ts.get(inT) + "-T-" + findSimplest(Ts.get(inT)));
+		for (int inG = 0; inG < Gs.size(); inG++)
+			Gs.set(inG, Gs.get(inG) + "-G-" + findSimplest(Gs.get(inG)));
+
+		if(complex.size()>0)
+		{
+			complex = SortVectorAccordToLength(complex);
+			complex = RetrieveSimplestIndel(complex);
+		}
+		// Insert simplest Indel
+		list.add(As); 
+		list.add(Cs); 
+		list.add(Ts); 
+		list.add(Gs); 
+		list.add(complex);
+
+		return list;
+	}
+	
+	
+	
+	public static Vector<String> RetrieveSimplestIndel(
+			Vector<String> complexIndels) {
+		//System.out.println("------RetrieveSimplestIndel Start! ------");
+		String simplest = "";
+		// Cut the indel type into first substring (under question) and second
+		// substring(checking string)
+		String curindel = "", remsub = "", subqrempart = "", firstsub = "", secondsub = "", crsusub = "";
+		int sesublength = 0, reminder = 0, length = 0, lengthquot = 0;
+
+		boolean notthesimple = false;
+		boolean foundSimplest = false;
+		//System.out.println(complexIndels.size());
+		for (int h = 0; h < complexIndels.size(); h++)
+		{
+			
+			curindel = complexIndels.get(h);
+			//System.out.println(" ]]]] " + curindel);
+			length = curindel.length();
+			simplest="";
+			//System.out.println(length);
+			//if(length%2!=0)
+			if(isPrime(length))	
+			{
+				foundSimplest=true;
+				simplest=curindel;
+				//System.out.println("Primer " + length + " " + simplest);
+			}
+			else
+			{
+				if (length <= 3) 
+				{
+					simplest = curindel;
+					foundSimplest = true;
+				} 
+				else 
+				{
+					lengthquot = length / 2;
+					//System.out.println("}} " + lengthquot);
+					foundSimplest=false;
+					for (int i = 2; i < lengthquot + 1; i++)
+					{
+						notthesimple = false;
+						firstsub = curindel.substring(0, i);
+						secondsub = curindel.substring(i, length);
+						//System.out.println(firstsub  + " " + secondsub);
+						sesublength = secondsub.length();
+						reminder = sesublength % i;
+						// System.out.println(firstsub + " " + secondsub);
+						// Go through all remined substrings of length = questioning string length
+						// If at least one unequal found break and increase the string questioning size by one
+						// else this will be the simplest
+						for (int j = i; j < secondsub.length() + 1; j += i)
+						{
+							crsusub = secondsub.substring(j - i, j);
+							//System.out.println("seq " + crsusub);
+							//System.out.println(firstsub  + " " + crsusub);
+							if (!crsusub.equals(firstsub))
+							{
+								//System.out.println(firstsub + " != " + crsusub);
+								notthesimple = true;
+								break;	
+							}
+						}
+						
+						if (notthesimple == false && reminder > 0)
+						{
+							// this loop tests if first part of the questioning 
+							// sequence is equal to the reminder sequence
+							/*
+							remsub = secondsub.substring(secondsub.length()
+								- reminder, secondsub.length());
+							System.out.println(firstsub);
+							subqrempart = firstsub.substring(0, reminder);
+							System.out.println(remsub + " ? " + subqrempart);
+							if (!(remsub.equals(subqrempart)))
+								notthesimple = true;
+							*/
+							// If there is reminder then sequence is not repeating 
+							notthesimple = true;
+						}
+						if (notthesimple == false)
+						{
+							// System.out.println("simplest = " + firstsub);
+							simplest = firstsub;
+							foundSimplest = true;
+							//System.out.println("### " + simplest);
+						}
+						if (foundSimplest)
+							break;
+					}
+				}
+				if (foundSimplest == false)
+					simplest = curindel;
+			}
+			if(simplest.isEmpty())
+				simplest = curindel;
+			//System.out.println("simplest = " + simplest);
+			complexIndels.set(h, curindel + "-" + simplest);
+		}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////	
+		String entire = "", indel = "", simpres = "", res = "";
+
+		for (int i = 0; i < complexIndels.size(); i++) {
+			entire = complexIndels.get(i);
+			String[] wds = entire.split("-");
+			indel = wds[0];
+			simpres = findSimplest(indel);
+			res = entire + "-" + simpres;
+			complexIndels.set(i, res);
+		}
+
+
+
+		//System.out.println("------RetrieveSimplestIndel End. ------");
+		return complexIndels;
+	}
+
+	
+	public static String findSimplest(String indel) {
+		String simplest = "", crtst="";
+
+		int lind = 0, n1 = 0, lres = 0, n2 = 0;
+		// lind : length of indel,
+		// n1 : increased window for testing the repeats
+		// lres : length of the residue
+		lind = indel.length();
+		String crret1 = "", crret2 = "", crret11 = "", crret22 = "", residue = "";
+		int a = 1;
+		Vector<String> vc = new Vector<String>();
+		Vector<String> rs = new Vector<String>();
+		//if (lind == 2)
+	//		vc.add(indel.substring(0, 1) + "_" + 1 + ":"
+		//				+ indel.substring(1, 2) + "_" + 1);
+			// else if(lind==3)
+			// {
+			// vc.add(indel.substring(0,1) + "_" + 1 + ":" +
+			// indel.substring(1,3) + "_" + 1);
+			// vc.add(indel.substring(0,2) + "_" + 1 + ":" +
+			// indel.substring(2,3) + "_" + 1);
+			// }
+			for (int i1 = a; i1 <= lind; i1++) {
+					// System.out.println("\n");
+					// System.out.println("N = " + i1);
+// left direction main loop
+					// System.out.println(indel + " " + i1 + " left");
+					crret1 = findRepeat(indel, i1, "left", "out");
+					String[] arr1 = crret1.split(" ");
+
+					n1 = arr1[0].length() * Integer.parseInt(arr1[1]);
+
+					// System.out.println(crret1);
+					residue = indel.substring(n1, indel.length());
+					lres = residue.length();
+					// System.out.println(residue + "\n");
+					
+				    if(residue.length()>0)
+				    {
+				    	for (int i2 = a; i2<=lres; i2++)
+				    	{
+				    		crret2 = findRepeat(residue, i2, "left", "in");
+				    		//System.out.println(residue);
+				    		String[] arr2 = crret2.split(" ");
+				    		n2 = arr2[0].length()*Integer.parseInt(arr2[1]);
+				    		if (n1 + n2 == lind) 
+				    		{
+				    			//System.out.println(" -L- " + arr1[0] + "" + arr1[1] + ":" + arr2[0] + "" + arr2[1]);
+				    			crtst = arr1[0] + "_" + arr1[1] + ":" + arr2[0] + "_" + arr2[1];
+				    			//vc.add(arr1[0] + "_" + arr1[1] + ":" + arr2[0] + "_" + arr2[1]);
+				    			vc = vectorSet(crtst, vc);
+				    			break;
+				    		}
+				    	}
+				    }
+				    else
+				    {
+				    	crtst = arr1[0] + "_" + arr1[1] + ":0";
+				    	vc = vectorSet(crtst, vc);
+				    	//System.out.println(" -L- " + arr1[0] + "" + arr1[1] + ":0" );
+				    }
+					// System.out.println();
+// left direction main loop
+
+// right direction main loop
+					// System.out.println(indel + " " + i1 + " right");
+					crret11 = findRepeat(indel, i1, "right", "out");
+					arr1 = crret11.split(" ");
+					n1 = arr1[0].length() * Integer.parseInt(arr1[1]);
+					residue = indel.substring(0, lind - n1);
+					// # print $residue,"\n";
+					// System.out.println(
+					lres = residue.length();
+				    if(residue.length()>0)
+				    {
+				    	for (int i2 = a; i2 <= lres; i2++) 
+				    	{
+		    	
+				    		crret22 = findRepeat(residue, i2,"right", "in");
+				    		String[] arr2  = crret22.split(" ");
+				    		n2 = arr2[0].length()*Integer.parseInt(arr2[1]);
+				    		// #	print $n2,"\n";
+				    		if (n1 + n2 == lind) 
+				    		{
+				    			//System.out.println(" -R- " + arr2[0] + "" + arr2[1] + ":" + arr1[0] + "" + arr1[1]);
+				    			crtst = arr2[0] + "_" + arr2[1] + ":" + arr1[0] + "_" + arr1[1];
+				    			//vc.add(arr2[0] + "_" + arr2[1] + ":" + arr1[0] + "_" + arr1[1]);
+				    			vc = vectorSet(crtst, vc);
+				    			break;
+				    		}
+				    	}
+				    }
+				    else
+				    {
+				    	crtst = "0:" + arr1[0] + "_" + arr1[1];
+				    	vc = vectorSet(crtst, vc);
+				    	//System.out.println(" -L- " + arr1[0] + "" + arr1[1] + ":0" );
+				    }
+// right direction main loop
+				    
+					// break;
+				}
+		
+
+		// System.out.println();
+		String cr = "", firsstrcnt = "", secondstrcnt = "", firstrp = "", secrep = "", totindl = "";
+		int crsize = 0, minsz = 200;
+		String resindel = "";
+
+		for(int i=0; i<vc.size(); i++)
+		{
+				//System.out.println(vc.get(i));
+				cr = vc.get(i);
+				String[] wds = cr.split(":");
+				firsstrcnt = wds[0];
+				String[] wdsf= firsstrcnt.split("_");
+				firstrp = wdsf[0];
+				secondstrcnt = wds[1];
+				String[] wdss= secondstrcnt.split("_");
+				secrep = wdss[0];
+				if(!(firsstrcnt.equals("0")) && !(secondstrcnt.equals("0")) )
+					totindl = firstrp + secrep;
+				else
+				{
+					if (firsstrcnt.equals("0"))
+					{
+						totindl=secrep;
+						//System.out.println(" + " + totindl);
+					}
+					if (secondstrcnt.equals("0"))
+					{
+						totindl=firstrp;
+						//System.out.println(" + " + totindl);	
+					}
+				}
+				
+				crsize = totindl.length();
+				if(minsz>crsize)
+				{
+					resindel = cr;
+					minsz = crsize;
+				}
+		}
+		
+		rs = findSameMinSizeIndelRepeats(vc, resindel, minsz);
+		// System.out.println("\n\n\n");
+		String crent="";
+		for (int i = 0; i < rs.size(); i++)
+		{
+			crent = rs.get(i);
+			simplest=simplest + crent + "|";
+		}
+			//System.out.println(rs.get(i));
+		return simplest;
+	}
+	
+	public static String findRepeat(String ind, int len, String side,
+			String inout) {
+		String space = "";
+		if (inout.equals("out"))
+			space = "";
+		else if (inout.equals("in"))
+			space = "    res ";
+		// System.out.println("\n" + space + "findRepeat-start : \n" + space +
+		// ind + " " + len + " " + side);
+		String rep = "", crsub = "", results = "";
+		int index = 0, lind = 0, n = 0;
+		if (side.equals("right")) {
+			ind = reverse(ind);
+			// System.out.println(ind);
+		}
+		rep = ind.substring(0, len);
+		// System.out.println(space + rep);
+
+		index = len;
+		lind = ind.length();
+		n = 1;
+
+		while (index + len <= lind) {
+			crsub = ind.substring(index, index + len);
+			// System.out.println(rep + " " + crsub + " " + index);
+			if (crsub.equals(rep)) {
+				n = n + 1;
+				// System.out.println(space + n + "  " + (index));
+				index = index + len;
+				// System.out.println(space + n + "  " + (index-1));
+				// System.out.println(rep + " " + crsub + " " + index);
+				// System.out.println(space + n + "  " + (index));
+			} else {
+				// n=n;
+				// System.out.println("break");
+				// System.out.println(space + n + " break");
+				break;
+			}
+		}
+
+		// System.exit(0);
+		if (side.equals("right"))
+			rep = reverse(rep);
+
+		results = rep + " " + n;
+		// System.out.print(space + ind + " " + results + " ");
+		return results;
+	}
+
+	public static Vector<String> findSameMinSizeIndelRepeats(Vector<String> vc, String resindel, int minsz)
+	{
+		Vector<String> res = new Vector<String>();
+		
+		String cr="", firsstrcnt="", secondstrcnt="", firstrp="", secrep="", totindl="";
+		int crsize=0;
+		
+		for(int i=0; i<vc.size(); i++)
+		{
+//				System.out.println(vc.get(i));
+				cr = vc.get(i);
+				String[] wds = cr.split(":");
+				firsstrcnt = wds[0];
+				String[] wdsf= firsstrcnt.split("_");
+				firstrp = wdsf[0];
+				secondstrcnt = wds[1];
+				String[] wdss= secondstrcnt.split("_");
+				secrep = wdss[0];
+				if(!(firsstrcnt.equals("0")) && !(secondstrcnt.equals("0")) )
+					totindl = firstrp + secrep;
+				else
+				{
+					if (firsstrcnt.equals("0"))
+					{
+						totindl=secrep;
+						//System.out.println(" + " + totindl);
+					}
+					if (secondstrcnt.equals("0"))
+					{
+						totindl=firstrp;
+						//System.out.println(" + " + totindl);	
+					}
+				}
+				crsize = totindl.length();
+				if(minsz==crsize)
+					res.add(cr);
+		}
+		
+		return res;
+	}
+	
+	
+	
+	public static String CountIndels(Vector<Vector<String>> list, String indels)
+	{
+		Vector<String> crvect = new Vector<String>();
+		String[] idwdss = indels.split(",");
+		int counter=0, total =0;
+		String crtp="", crinl="", results="", crindlcount="", crtpstr="", smpind="", simplest="";
+		for(int i=0; i<list.size(); i++)
+		{
+			crvect = list.get(i);
+
+/*
+			if(crvect.size()==0 && i==0)	// As
+				System.out.println("No (poly)As.");
+			if(crvect.size()==0 && i==1)	// Cs
+				System.out.println("No (poly)Cs.");
+			if(crvect.size()==0 && i==2)	// Ts
+				System.out.println("No (poly)Ts.");
+			if(crvect.size()==0 && i==3)	// Gs
+				System.out.println("No (poly)Gs.");
+			if(crvect.size()==0 && i==4)	// complex
+				System.out.println("No complex.");
+			System.out.println();
+*/
+
+			if(crvect.size()>0)
+				for(int t=0; t<crvect.size(); t++)
+				{
+					//System.out.println("-- " + crvect.get(t));
+					crtpstr = crvect.get(t);
+					String[] inwds = crtpstr.split("-");
+					crtp  = inwds[0];
+					smpind = inwds[1];
+					simplest = inwds[2];
+					total = total + counter;
+					counter=0;
+
+					for(int j=0; j<idwdss.length; j++)
+					{
+						crinl  = idwdss[j];
+						if(crinl.equals(crtp))
+							counter = counter + 1;
+					}
+
+//					System.out.println(crtp + "_" + counter);
+					//crindlcount = crtp +  "_" + counter;
+					crindlcount = crtp + "-" + smpind + "-" + simplest + "-" + counter;
+					results = results + crindlcount +",";
+				}
+		}
+		return results;
+	}
+
+	public static String reverse(String ind) {
+		String reversed = "";
+		for (int i = ind.length() - 1; i > -1; i--)
+			reversed = reversed + ind.charAt(i);
+		return reversed;
+	}
+	
+	public static Vector<String> vectorSet(String cr, Vector<String> vc) {
+		boolean found = false;
+		String current = "";
+		for (int i = 0; i < vc.size(); i++) {
+			current = vc.get(i);
+			if (current.equals(cr))
+				found = true;
+		}
+		if (found == false)
+			vc.add(cr);
+		return vc;
+	}
+	
+	public static boolean isPrime(int indlength) 
+	{
+	    if (indlength%2==0) 
+	    	return false;
+	    for(int i=3; i*i<=indlength; i+=2) 
+	    {
+	        if(indlength%i==0)
+	            return false;
+	    }
+	    return true;
+	}
+	
+	public static String buildSpaceString(int length)
+	{
+		String result = "";
+		for(int i=0; i<length; i++)
+			result = result + " ";
+		return result;
+	}
+	
+	
+	public static String findIndelMatchRecentMatch(Vector<Integer> allposvc, 
+			String seq, int position, String res, String type)
+	{
+		String results="", results1="", results2="", results3="";
+		String crtotindel = "", crindel="", crsimple="", indelcountpoly="", 
+				crtotsimplest="", crsimplest="", crlefttot="", crrepleft="", crindelcount="", 
+				crrepleftcount="", crrighttot="", crrepright="", crreprightcount="";
+		String curindrlres="", cursimplres="", cursimplestres="", cursimplest="", cumsimplest="";
+		String curesults="", crindelclean="";
+		int crreprightcounti=0, reprightsize=0, crrepleftcounti=0, repleftsize=0;
+
+		String currrefseq="";
+
+		int crindelsize=0, cursimpleindsize=0;
+		int indelrightborder=0, indelleftborder=0;
+		int simpindelrightborder=0, simpindelleftborder=0;
+		int repeatrightborder=0, repeatleftborder=0;
+		int crsimplestrepleftstart=0, crsimplestrepleftend=0;
+		int crsimplestreprightstart=0, crsimplestreprightend=0;
+		int rpos=0;
+		String cursimplestleftres="", cursimplestrightres="";
+		String srr="", slr="", indr="";
+		boolean leftiszero=false, rightiszero=false;
+		boolean simpestrightisrepeat = false;
+		boolean simpestleftisrepeat  = false;
+		boolean indelrepeat  = false;
+		boolean firstdontmatch = false;
+//		System.out.println("-- " + res);
+//		/////
+		String[] wds = res.split(",");
+//		/////
+		for(int i=0; i<wds.length; i++)
+		{
+			// indel - simple-indel - simplest-indel-forms - indel-counts
+			crindelsize=0;
+			cursimpleindsize=0; 
+			indelrightborder=0; 
+			indelleftborder=0;
+			simpindelrightborder=0;
+			simpindelleftborder=0;
+			indelrepeat  = false;
+			crtotindel = wds[i];
+//			/////	
+			// indel - simple-indel - simplest-indel-forms - indel-counts
+			String[] wds1 = crtotindel.split("-");
+//			/////
+
+			//System.out.println("----> " + crtotindel);
+			crindel=wds1[0];
+			crsimple=wds1[1];
+			crtotsimplest=wds1[2];
+			indelcountpoly=wds1[3];
+//			String[] cnplwds = indelcountpoly.split("@");
+//			crindelcount = cnplwds[0];
+			crindelcount = wds1[3];
+			//System.out.println(crindelcount);
+			crindelsize = crindel.length();
+
+			//System.out.println(crindelsize + " " + crindelcount);
+			cursimpleindsize = crsimple.length();
+			indelleftborder=0;
+			indelrightborder=0;
+			firstdontmatch = false;
+			// Here the checking start from left
+			// and ends to right checking eventually global firstdontmatch 
+			// variable will be regulated from righ checking point for Indel part
+			// in case of deletions the right part is the supposed sequence and cannot be
+			// perceived as repeat
+			// in deletions the left part is always repeat
+			// in insertion both right and left part are repeats
+			// example 
+			//		sequence    CTCCT   TACTCTCCTA
+			//		deletion      ---   TAC---     not repeat
+			//		insertion     ---AAA---        not repeat
+			//  checking points with '-' 
+
+			//		sequence    CTAAA   TACTACCCTA
+			//		deletion      ---   TAC---    repeat from right 
+			//		insertion     ---AAA---       repeat from left
+			//  checking points with '-' 			
+			
+			//                          --- in deletions this part is considered not repeat
+			//		sequence    CTTAC   TACTACCCTA
+			//		deletion      ---   TAC---    repeat from left and right(1 time right) 
+			//		insertion     ---TAC---       repeat from left and right(2 times right)
+			//  checking points with '-' 		
+			
+			indelleftborder  = repeatLeftMatches(allposvc, seq, position, crindel, crindelsize);
+			indelrightborder = repeatRightMatches(allposvc, seq, position, crindel, crindelsize);
+
+			if(indelleftborder==0)
+				indelleftborder = position + 1;
+			if( (indelleftborder<=position) || (indelrightborder>position + crindelsize) )
+				indelrepeat = true;
+			if(indelrightborder==0)
+				indelrightborder = position + crindelsize;
+			if (indelrepeat)
+				//indr="r" + "$$" + indelleftborder + "$$" + indelrightborder;
+				indr="r";
+			if (!indelrepeat)
+				indr="u";
+			if( (indelleftborder<=position) && (indelrightborder>position + crindelsize) )
+				indr="R";
+//			Entire indel
+			// u=k, r=l, R=L
+			if(type.equals("dls"))
+			{
+				if( (firstdontmatch) && indr.equals("u") )
+					indr="k";
+				if( (firstdontmatch) && indr.equals("r") )
+					indr="l";
+				if( (firstdontmatch) && indr.equals("R") )
+					indr="L";
+			}
+			else if(type.equals("ins"))
+			{
+				if( (firstdontmatch) && indr.equals("u") )
+					indr="k";
+				if( (firstdontmatch) && indr.equals("r") )
+					indr="l";
+				if( (firstdontmatch) && indr.equals("R") )
+					indr="L";
+				if(!(firstdontmatch))
+				{
+					if((indelleftborder<=position))
+						indr="R";
+					else
+						indr="r";
+				}
+			}
+			
+//			System.out.println(crindelsize + " " + crindelcount + " " + indelleftborder + " " + indelrightborder);
+
+//			curindrlres = crindel + "@" + indelleftborder + "@" + indelrightborder ;
+			curindrlres = crindel + crindelcount + "@" + indelleftborder+ "@" + indr;
+			//+ "@" + indelrightborder;
+
+			simpindelrightborder=repeatRightMatches(allposvc, seq, position, crsimple, cursimpleindsize);
+			simpindelleftborder=repeatLeftMatches(allposvc, seq, position, crsimple, cursimpleindsize);
+
+			if(simpindelleftborder==0)
+				simpindelleftborder = position + 1;
+//			cursimplres = crsimple + "@" + simpindelleftborder + "@" + simpindelrightborder;
+			cursimplres = crsimple + "@" + simpindelleftborder;
+			// + "@" + simpindelrightborder;
+
+			//System.out.println(curindrlres);
+			//System.out.println(crsimple);
+
+/*			
+			if(indelrightborder>0)
+				System.out.println("Found right mathing border : " + indelrightborder);
+			else
+				System.out.println("Not Found right mathing border.");
+			
+			if(indelleftborder>0)
+				System.out.println("Found left mathing border : " + indelleftborder);
+			else
+				System.out.println("Not Found left mathing border.");
+			
+	*/		
+// 			Simplest indel forms			
+			String[] wds2 = crtotsimplest.split("\\|");
+//	 		Simplest indel forms			
+			for(int j=0; j<wds2.length; j++)
+			{
+				leftiszero  = false;
+				rightiszero = false;
+				
+				crsimplest = wds2[j];
+				String[] wds3 = crsimplest.split(":");
+				crlefttot = wds3[0];
+				crrighttot = wds3[1];
+/////  ---------------------------------------------------
+//				System.out.println(crlefttot + " ++ " + crrighttot);
+/////  ---------------------------------------------------
+				repeatrightborder = 0;
+				repeatleftborder = 0;
+				repleftsize=0;
+				
+				simpestleftisrepeat = false;
+				simpestrightisrepeat = false;
+				srr="";
+				slr="";
+				if(crlefttot.equals("0"))
+				{
+					leftiszero=true;
+//					System.out.println("Left  is zero.");
+				}
+				if(crrighttot.equals("0"))
+				{
+					rightiszero=true;
+//					System.out.println("Right is zero.");
+				}
+				firstdontmatch = false;
+				if(!leftiszero)
+				{
+					String[] wds4b = crlefttot.split("_");
+					crrepleft = wds4b[0];
+					repleftsize = crrepleft.length();
+					crrepleftcount = wds4b[1];
+					crrepleftcounti = Integer.parseInt(crrepleftcount);
+					//System.out.println("** && " + crsimplest + " " + crlefttot + " " + 
+					//crlefttot + " " + crrepleft + " " + crrepleftcount);
+					//repeatleftborder = repeatLeftMatches(allposvc, seq, position, crrepleft, repleftsize);
+					crsimplestrepleftstart =  repeatLeftMatches(allposvc, seq, position+repleftsize, crrepleft, repleftsize);
+					if(crsimplestrepleftstart==0)
+						crsimplestrepleftstart = position+1;
+					
+					//System.out.println("** " + crsimplestrepleftstart);
+					//System.exit(0);
+					crsimplestrepleftend   = repeatRightMatches(allposvc, seq, position, crrepleft, repleftsize);
+					if(type.equals("dls"))
+					{
+						if (crsimplestrepleftstart<=position)
+							simpestleftisrepeat=true;
+						else
+							simpestleftisrepeat=false;
+					}
+					else if(type.equals("ins"))
+					{
+						if ( (crsimplestrepleftstart<=position) || (!firstdontmatch) )
+							simpestleftisrepeat=true;
+						else
+							simpestleftisrepeat=false;
+					}
+				}
+				reprightsize=0;
+				//System.out.println(type);
+				firstdontmatch = false;
+				if(!rightiszero) 
+				{
+					rpos = 0;
+					String[] wds4a = crrighttot.split("_");
+					crrepright = wds4a[0];
+					reprightsize = crrepright.length();
+					crreprightcount = wds4a[1];
+					crreprightcounti = Integer.parseInt(crreprightcount);
+					
+					rpos = position + 1 + (crindelsize - (reprightsize * crreprightcounti));
+					
+					//System.out.println("&&&&&&&&&&&&&&& " + (rpos) + " " + crrepright + " " + reprightsize );
+					//////////////////////////////////////////////////////////////////////////////////////////////
+					//////////////////////////////////////////////////////////////////////////////////////////////
+//					crsimplestreprightstart =  repeatLeftMatches(allposvc, seq, rpos+reprightsize-1, crrepright, reprightsize);
+					crsimplestreprightstart = rpos; 
+							//repeatLeftMatches(allposvc, seq, rpos+reprightsize-1, crrepright, reprightsize);
+
+					//////////////////////////////////////////////////////////////////////////////////////////////
+					//////////////////////////////////////////////////////////////////////////////////////////////
+					//System.out.println("&&&&&&&&&&&&&&& " + (rpos+1));
+					crsimplestreprightend   = repeatRightMatches(allposvc, seq, rpos-1, crrepright, reprightsize);
+					if(type.equals("dls"))
+					{
+						if(crsimplestreprightend>position + crindelsize)
+							simpestrightisrepeat=true;
+					}
+					
+					else if(type.equals("ins"))
+					{
+						if( (crsimplestreprightend>position + crindelsize) || (!firstdontmatch))
+							simpestrightisrepeat=true;
+					}
+//// ------------------------------------------------------
+					//System.out.println("}}{{ " + crsimplestreprightend);
+//// ------------------------------------------------------
+				}
+				
+				
+				if( (leftiszero) && (!rightiszero))
+				{
+					
+					
+					crrepleft = "0";
+					crrepleftcount = "";
+					//crsimplestrepleftstart = 0;
+					//crsimplestrepleftend   = 0;
+/*					
+					if(crsimplestreprightstart>0)
+					{
+						crsimplestrepleftstart=crsimplestreprightstart;
+						crsimplestrepleftend=crsimplestreprightstart;
+					}
+					else
+					{
+						crsimplestrepleftstart = position+1;
+						crsimplestrepleftend   = position+1;
+					}
+					
+*/
+					String[] wds4b = crrighttot.split("_");
+					crrepleft = wds4b[0];
+					repleftsize = crrepleft.length();
+					crrepleftcount = wds4b[1];
+					crrepleftcounti = Integer.parseInt(crrepleftcount);
+					
+					//System.out.println("** && " + crsimplest + " " + crlefttot + " " + 
+					//crlefttot + " " + crrepleft + " " + crrepleftcount);
+					//repeatleftborder = repeatLeftMatches(allposvc, seq, position, crrepleft, repleftsize);
+				//	System.out.println(" ppp " + (position+0) + " " + crrepleft + " " + repleftsize);
+					crsimplestrepleftstart =  repeatLeftMatches(allposvc, seq, position+0, crrepleft, repleftsize);
+					
+					
+					if(crsimplestrepleftstart==0)
+						crsimplestrepleftstart = position+1;
+					
+					//System.out.println("** " + crrepleft + " " + crsimplestrepleftstart);
+					//System.exit(0);
+					crsimplestrepleftend   = repeatRightMatches(allposvc, seq, position, crrepleft, repleftsize);
+					if(type.equals("dls"))
+					{
+						if (crsimplestrepleftstart<=position)
+							simpestleftisrepeat=true;
+						else
+							simpestleftisrepeat=false;
+					}
+					else if(type.equals("ins"))
+					{
+						if (crsimplestrepleftstart<=position)
+							simpestleftisrepeat=true;
+						else
+							simpestleftisrepeat=false;
+					}
+					crrepleft = "0";
+					crrepleftcount = "";
+					
+				
+				}
+				if(rightiszero)
+				{
+				//	crrepright = "0";
+				//	crreprightcount = "";
+				//	crsimplestreprightstart = 0;
+				//	crsimplestreprightend   = 0;
+/*					
+					if(crsimplestrepleftend>0)
+					{
+						crsimplestreprightstart=crsimplestrepleftend;
+						crsimplestreprightend=crsimplestrepleftend;
+					}
+					else
+					{
+						crsimplestreprightstart = position + crindelsize;
+						crsimplestreprightend = position + crindelsize;
+					}
+*/
+					rpos = 0;
+					String[] wds4a = crlefttot.split("_");
+					crrepright = wds4a[0];
+					reprightsize = crrepright.length();
+					crreprightcount = wds4a[1];
+					crreprightcounti = Integer.parseInt(crreprightcount);
+					
+					rpos = position + 1 + (crindelsize - (reprightsize * crreprightcounti));
+					
+					//System.out.println("&&&&&&&&&&&&&&& " + (rpos) + " " + crrepright + " " + reprightsize );
+					//////////////////////////////////////////////////////////////////////////////////////////////
+					//////////////////////////////////////////////////////////////////////////////////////////////
+//					crsimplestreprightstart =  repeatLeftMatches(allposvc, seq, rpos+reprightsize-1, crrepright, reprightsize);
+					crsimplestreprightstart = rpos; 
+							//repeatLeftMatches(allposvc, seq, rpos+reprightsize-1, crrepright, reprightsize);
+
+					//////////////////////////////////////////////////////////////////////////////////////////////
+					//////////////////////////////////////////////////////////////////////////////////////////////
+					//System.out.println("&&&&&&&&&&&&&&& " + (rpos+1));
+					crsimplestreprightend   = repeatRightMatches(allposvc, seq, rpos-1, crrepright, reprightsize);
+					if(type.equals("dls"))
+					{
+						if(crsimplestreprightend>position + crindelsize)
+							simpestrightisrepeat=true;
+					}
+					
+					else if(type.equals("ins"))
+					{
+						if( (crsimplestreprightend>position + crindelsize) || (!firstdontmatch))
+							simpestrightisrepeat=true;
+					}
+					
+					
+					crrepright = "0";
+					crreprightcount = "";
+				}
+
+				if(simpestrightisrepeat)
+					srr="r";
+				if(!simpestrightisrepeat)
+					srr="u";
+				if(simpestleftisrepeat)
+					slr="r";
+				if(!simpestleftisrepeat)
+					slr="u";
+				cursimplestleftres = "";
+				if(leftiszero && ( indr.equals("R") || indr.equals("L")) )
+				{
+					slr="r";
+					crsimplestrepleftstart = indelleftborder;
+				}
+				if(rightiszero && ( indr.equals("R") || indr.equals("L")) )
+				{
+					srr="r";				
+					crsimplestreprightstart = indelrightborder;
+				}
+				//if( (type.equals("dls")) && (srr.equals("r") || slr.equals("r"))
+						
+				cursimplestleftres  = crrepleft + crrepleftcount + 
+					"@" + crsimplestrepleftstart + "@" + slr;
+ 						//+ "@" + crsimplestrepleftend;
+				cursimplestrightres = crrepright + crreprightcount + 
+						"@" + crsimplestreprightstart + "@" + srr;
+						 //+ "@" + crsimplestreprightend;
+		
+				cursimplest = cursimplestleftres + ":" + cursimplestrightres;
+				//cursimplest = crsimplest + "@" + repeatleftborder + "@" + repeatrightborder;
+				cumsimplest = cumsimplest + cursimplest + "|";
+				cursimplest = "";
+				//System.out.println(" -|- " + cumsimplest);
+				//System.out.println(crsimplest + " " + crlefttot + " " + crrighttot);
+			}
+//			curesults = curindrlres + "-" + cursimplres + "-" + cumsimplest + "-" + indelcountpoly;
+			curesults = curindrlres + "-" + cumsimplest + "-" + indelcountpoly;
+
+			results = results + curesults + ",";
+
+			//cumsimple = "";
+			//cursimplest ="";
+			cumsimplest = "";
+			curesults = "";
+			//crindel="";
+			//crsimple="";
+			//crtotsimplest="";
+		}
+		//System.out.println(results);
+		results1 = results.replaceAll(":", "_");
+		results2 = results1.replaceAll("-", ":");
+//		System.out.println("+"+results2);
+		results3 = findBestLeftMatch(results2, position);
+
+		return results3;
+	}
+	
+// Deletions Part
+//	
+	public static Integer repeatLeftMatches(Vector<Integer> allposvc, 
+			String seq, int position, 
+			String rep, int size)
+	{
+		boolean matches = false;
+		String crflankseq="";
+		int startpos =0;
+		//if(position<allposvc.size()-1)
+		startpos = position + 1;
+		//startpos = position;
+	//	System.out.println(rep + " LLL " + startpos);
+		//else
+		//	startpos = position;
+		int crindexstart=0, crindexend=0;
+		String crrefcheck="";
+		int leftborder=0;
+		int count=-1;
+		if(startpos<allposvc.get(allposvc.size()-1))
+		{
+		//if(startpos<allposvc.get(allposvc.size()-1))
+			for(int i=startpos; i>allposvc.get(0)+size; i -= size)
+			{
+				count = count + 1;
+				//crindexstart=0;
+				//crindexend=0;
+				for(int j=0; j<allposvc.size(); j++)
+				{
+					if(i-size==allposvc.get(j))
+						crindexstart=j;
+					else if(i==allposvc.get(j))
+					{
+						crindexend=j;
+						//System.out.println( position + " " + (i-size) + " " + allposvc.get(j) + " " + j);
+					}
+						//System.out.println(i + " " + allposvc.get(j));
+				}
+
+				//if(crindexstart<0 || crindexend<0)
+				//{
+				//System.out.println("--->--->---> " + crindexstart + "\n" + crindexend + 
+				//"\n" + i + " " + position + "\n" + size + " rep : " + rep + "\n" + seq);
+				//for(int a=0; a<allposvc.size(); a++)
+				//	System.out.print(allposvc.get(a) + " ");
+				//System.out.println();
+				//if(crindexstart<0)			
+				//	crindexstart=0;
+				//if(crindexend<0)
+				//	crindexend=0;
+				//}
+
+				//if(crindexstart>crindexend)
+				//{
+				//	System.out.println("--->--->---> " + crindexstart + " " + crindexend + 
+				//	"\n" + i + " " + position + "\n" + size + " rep : " + rep + "\n" + seq);
+				//	crindexend = crindexstart;
+				//	System.exit(0);			
+				//}
+				crrefcheck = seq.substring(crindexstart, crindexend);
+			//	System.out.println("to left : matches     " + rep + "  " + crrefcheck);
+				//if(count==0 && (!(rep.equals(crrefcheck))) )
+				//	firstdontmatch = true;
+				if(rep.equals(crrefcheck))
+				{
+				//	System.out.println("to left : matches     " + rep + "  " + crrefcheck);
+					leftborder = i-size;
+				}
+				else
+				{
+					//System.out.println("to left : not matches " + rep + "  " + crrefcheck);
+					break;
+				}
+			}
+		}
+		else
+		//	//leftborder = allposvc.get(allposvc.size()-1;
+			leftborder = 0;
+	//	System.out.println(leftborder);
+		return leftborder;
+	}
+
+	public static Integer repeatRightMatches(Vector<Integer> allposvc, 
+			 String seq, int position, String rep, int size)
+			{
+				
+				boolean matches = false;
+				boolean firstdontmatch = false;
+				String crflankseq="";
+				int startpos = position + 1;
+	//			System.out.println(rep + " " + startpos);
+				
+				int crindexstart=0, crindexend=0;
+				String crrefcheck="";
+				int rightborder=0;
+				int count=-1;
+				for(int i=startpos; i<allposvc.get(seq.length()-size); i += size)
+				{
+					count=count+1;
+					
+					for(int j=0; j<allposvc.size(); j++)
+					{
+						if(i==allposvc.get(j))
+							crindexstart=j;
+						if(i+size==allposvc.get(j))
+							crindexend=j;
+					}
+					
+					crrefcheck = seq.substring(crindexstart, crindexend);
+	//				System.out.println(count + " " + rep + " " + crrefcheck);
+					if(count==0 && (!(rep.equals(crrefcheck))) )
+							firstdontmatch = true;
+							
+					if( (rep.equals(crrefcheck)) || (count<1) )
+					{
+						//System.out.println("to right : matches     " + rep + "  " + crrefcheck);
+						rightborder = i + size-1;
+					}
+					else
+					{
+						//System.out.println("to right : not matches " + rep + "  " + crrefcheck);
+						break;
+					}
+				}
+				
+				return rightborder;
+			}
+
+// Deletions Part
+//
+
+	public static String findBestLeftMatch(String results2, int position)
+	{
+		
+		String crres = "", results4 = "";	
+		String[] wds1 = results2.split(",");
+		String crindtot="";
+		String leftrepeat="", rightrepeat="", counts="";
+		String crindel="", crindelrepeat="", crindlsimplesttot="", crindlast="", 
+				crsimlest="", crsimplestlefttot="", crsimplestrighttot="",
+				crsimplestleft="", crsimplestright="", indel="", indleftstrt="";
+		String crindelcounts="", crsimlestleftstart="", crsimlestrightstart="",
+				crsimlestleftrepeat="", crsimlestrightrepeat=""; 
+		int crindelcountsi=0, crsimlestleftstarti=0, crsimlestrightstarti=0; 
+		int crpos = position + 1;
+		position = crpos;
+		int maxleftdist=-100, leftend=0;
+		String winner = "";
+		String repeatres="";
+		int indelsize=0;
+		boolean rightiszero =false;
+		String crindres ="";
+		for(int i=0; i<wds1.length; i++)
+		{
+			crindtot = wds1[i];
+			String[] wds2 = crindtot.split(":");
+			crindel = wds2[0];
+			crindelrepeat="";
+			String[] wds03 = crindel.split("@");
+			//System.out.println("--@@@ _ " + crindtot);
+			indel=wds03[0];
+			indleftstrt = wds03[1];
+			crindelrepeat = wds03[2];
+			// // // // // 
+			crindres = indel + "@" + indleftstrt;
+			// // // // //		
+			crindlast = wds2[1];
+			String[] wds6 = crindlast.split("@");
+			counts=wds6[0];
+			//System.out.println(counts);
+			String[] wds7 = crindel.split(counts);
+			indelsize = wds7[0].length();
+			// System.out.println(crindel + " " + indelsize);
+			crindlsimplesttot = wds2[1];
+			
+			String[] wds3 = crindlsimplesttot.split("\\|");
+			int leftdiff=0, rightdiff=0;
+			winner = "";
+			maxleftdist=-100;
+			leftrepeat="u"; 
+			rightrepeat="u";
+			rightiszero=false;
+			crsimlestleftrepeat=""; crsimlestrightrepeat=""; 
+			for(int j=0; j<wds3.length; j++)
+			{
+
+				crsimlest = wds3[j];
+				String[] wds4 = crsimlest.split("_");
+
+				crsimplestlefttot = wds4[0];
+				crsimplestrighttot = wds4[1];
+
+				String[] wds5l = crsimplestlefttot.split("@");
+				crsimplestleft = wds5l[0];
+				crsimlestleftstart = wds5l[1];
+				crsimlestleftstarti = Integer.parseInt(crsimlestleftstart);
+				//System.out.println(crsimplestlefttot);
+				crsimlestleftrepeat = wds5l[2];
+				
+				//System.out.println(position + " " + leftdiff + " " + crsimlest);
+				String[] wds5r = crsimplestrighttot.split("@");
+				crsimplestright = wds5r[0];
+				crsimlestrightstart = wds5r[1];
+				crsimlestrightstarti = Integer.parseInt(crsimlestrightstart);
+				crsimlestrightrepeat = wds5r[2]; 
+				rightiszero=false;
+				//CT10@32219702
+				//C1@32219702_T1@32219704|
+				//CT1@3221973_0@32219704|:
+				//CT1@3221973_0@32219704:
+				//10@r@u
+				//
+				leftdiff = crpos - crsimlestleftstarti;
+				if(crsimplestright.equals("0"))
+				{
+					rightdiff  = crsimlestrightstarti - (position+indelsize);
+					//if(position < crsimlestrightstarti)
+					//	rightdiff = position - crsimlestrightstarti;
+					//if(position > crsimlestrightstarti)
+					///	rightdiff = crsimlestrightstarti - position;
+					
+					rightiszero=true;
+				}
+				else
+					rightdiff = (position+indelsize) - crsimlestrightstarti;
+				// as left the right repeat is extended as more positive becomes the difference
+				
+				if(maxleftdist<=(leftdiff + rightdiff))
+				{
+					//winner = crsimlest;
+					winner = crsimplestleft + "@" + crsimlestleftstart + "_" + crsimplestright + "@" + crsimlestrightstart;
+					
+					maxleftdist = leftdiff + rightdiff;
+					
+					
+					if(rightiszero==false)
+					{	
+						if (leftdiff>rightdiff)
+						{
+							leftrepeat="r"; 
+							rightrepeat="u";
+						}
+
+						else if(leftdiff<rightdiff)// && (istheleft==false))
+						{
+							leftrepeat="u"; 
+							rightrepeat="r";
+						}
+						else if(leftdiff==rightdiff)
+						{
+							leftrepeat="r"; 
+							rightrepeat="r";
+						}
+					}
+					else if (rightiszero==true)
+					{
+						if(leftdiff>(rightdiff-indelsize))
+						{
+							leftrepeat="r"; 
+							rightrepeat="u";
+						}
+						else
+						{
+							leftrepeat="u"; 
+							rightrepeat="r";
+						}
+						
+						
+						
+						
+					}
+					leftrepeat = crsimlestleftrepeat;
+					rightrepeat = crsimlestrightrepeat;
+		
+				}
+				//System.out.println(crsimlest + "   " + crsimplestlefttot + " " + crsimplestrighttot);
+			}	
+
+
+			//repeatres = wds6[0] + "@" + leftrepeat + "@" + rightrepeat;
+			repeatres = crindelrepeat + leftrepeat + rightrepeat;
+			
+			//crres = crindel + ":" + crindlsimplesttot + ":" + winner + ":" + repeatres;
+//			crres = crindres + ":" + crindlsimplesttot + ":" + winner + ":" + repeatres;
+			
+			
+			crindlsimplesttot = cleanSimplestIndelTot(crindlsimplesttot);
+			crres = crindres + ":" + crindlsimplesttot + ":" + 
+					winner + ":" + repeatres;
+			
+			results4 = results4 + crres + ",";
+			//System.out.println(winner + ":" + repeatres);
+			//System.out.println(crindlast);
+		}
+
+		return results4;
+	}
+
+	public static String cleanSimplestIndelTot(String crindlsimplesttot)
+	{
+		String cleanned="", crsimplest="", 
+				crsimstleftot="",  crsimstrightot="",
+				crsimstleft="",  crsimstright="",
+				crclenned="", totcleaned="";
+		String[] wd1 = crindlsimplesttot.split("\\|");
+		
+		for(int i=0; i<wd1.length; i++)
+		{
+			crsimplest = wd1[i];
+			//System.out.println(" KK " +  crsimplest);
+			String[] wd2 = crsimplest.split("_");
+			
+			crsimstleftot = wd2[0];
+			crsimstrightot = wd2[1];
+			String[] wd3l = crsimstleftot.split("@");
+			String[] wd3r = crsimstrightot.split("@");
+			crclenned = wd3l[0] + "_" + wd3r[0];
+			totcleaned = totcleaned + crclenned + "|";
+		}
+		//System.out.println(crindlsimplesttot);
+		cleanned = totcleaned;
+		return cleanned;
+	}
+
+
+
+
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
+
+
+
+
 
 	//retrievemmirroredalt(CHROM, posiii, referencebase, prmrf, altern);
 	// Genome    Reference      base = ref
@@ -8940,7 +11810,7 @@ m++;
 			for (int y = 0; y < 10; y++) {
 				mwords[y] = mwords[y].replace("\"", "");
 			}
-
+			
 			/*
 			 * + origflnm + "\t" // 0 + site +"\t" // 1 + CHROM + "\t" // 2 +
 			 * REF + "\t" // 3 + ALT + "\t" // 4 + chromosome + "\t" // 5 +
@@ -11171,7 +14041,7 @@ m++;
 			String locus= chrp + ":" + refstart + "-" + refend;
 			System.out.println(locus);
 			// positionextract = locus
-			System.out.println("Start Extract Method!");
+			System.out.println("Start Extract Method!  > > " + outextract);
 			System.out.println(bash_pth + "\n" + samtools_path + 
 						"\n" + outextract + "\n" + locus + 
 						"\n" + alellextract + "\n" +  tmppath);
@@ -11402,15 +14272,15 @@ m++;
 				}
 
 				// Distance / No Distance Contro
-			if(outextract.equals("p"))
-			{
-				for(int i=0; i<results.size(); i++)
-					System.out.println(results.get(i));
-			}
-			else
-				writeToFile(outextract, results);
+//			if(outextract.equals("p"))
+//			{
+//				for(int i=0; i<results.size(); i++)
+//					System.out.println(results.get(i));
+//			}
+//			else
+			writeToFile(outextract, results);
 			//writeToFile(outextract+"vlns.tsv", vlns);
-			System.out.println("End Extract Method!");
+			System.out.println("End Extract Method!  ----------------  >>>>> ");
 		}
 		
 		public static String padDataSequenceExtract(String vcseq, String datql,
@@ -12140,7 +15010,7 @@ m++;
 		String CHROM = "", POS = "", REF = "", ALT = "", Left_start = "", Right_start = "";
 		String CurPOS = "", CurREF = "", CurALT = "";
 		String FinPOS = "", FinREF = "", FinALT = "";
-
+		int diffcrs_prvend=0; // introduced to minimize double calling(say limit 300)
 		// Create String line to hold all chromosomes separated by space
 		// This will generate an array of chromosome names from 1 to Y
 		for (int i = 1; i < 23; i++)
@@ -12155,6 +15025,7 @@ m++;
 		String[] chroms = crms.split(" "); // Chromosome array
 
 		remained = new Vector<String>();
+//	Sites are allready sorted 
 		for (int j = 0; j < chroms.length; j++) // Go through each chromosome
 		{
 			crmq = chroms[j];
@@ -12172,6 +15043,7 @@ m++;
 					// System.out.println("---> " + line);
 				}
 			}
+//	Generate multiple alternative field if more than one variants of same position have different Alternative 
 			for (int k = 1; k < chrmsite.size(); k++) 
 			{
 				lincpp = chrmsite.get(k - 1); // previous site
@@ -12213,8 +15085,9 @@ m++;
 					chrmsite.removeElementAt(k);
 					//System.out.println("New : " + lincp);
 					k = 0;
-                 }
+                 		}
 			}
+//	Generate multiple alternative field if more than one variants of same position have different Alternative 
 			for (int o = 0; o < chrmsite.size(); o++)
 				remained.add(chrmsite.get(o));
 		}
@@ -12222,9 +15095,12 @@ m++;
 		remained2 = new Vector<String>();
 
 		for (int j = 0; j < chroms.length; j++) // Go through each chromosome
+//		and merge overlaping sites 
 		{
 			crmq = chroms[j];
 			chrmsite = new Vector<String>();
+//			Collect all variants of the same chromosome
+//			Variantas are sorted and include multiple variants too			
 			for (int i = 0; i < remained.size(); i++) 
 			{
 				line = remained.get(i);
@@ -12237,7 +15113,8 @@ m++;
 					// System.out.println("---> " + line);
 				}
 			}
-
+//		Start from index 1 because site of index i-1 will be retrieved too
+//		Compare previous with current for overlaping region	
 			for (int k = 1; k < chrmsite.size(); k++) 
 			{
 
@@ -12266,8 +15143,18 @@ m++;
 
 				// if((crst<prst) || (cren<pren))
 				// System.out.println("not sorted");
+//	11/24/2016
+//	11/24/2016		if (  (crst < pren) && (!(CurPOS.equals(POS))))
+				diffcrs_prvend = crst-pren;
+//				if (  (crst <= pren) && (!(CurPOS.equals(POS))))	//	11/24/2016
+				//if (  (diffcrs_prvend < 300) && (!(CurPOS.equals(POS))))	//	11/24/2016
+//12/01/2016
+				if (  (diffcrs_prvend < 2) && (!(CurPOS.equals(POS))))
+//12/01/2016
 
-				if (  (crst < pren) && (!(CurPOS.equals(POS))))
+
+//				prevent double position to happen on table 
+
 				{
 					//System.out.println("overlap found");
 					//System.out.println(lincpp);
@@ -12901,6 +15788,7 @@ m++;
 	public static Vector<String> readTheFileIncludeFirstLine(String fnpath,
 			String filename) throws IOException, InterruptedException {
 		System.out.println("	    Start ReadTheFile method");
+		System.out.println("	    Start Read File : " + fnpath);
 		System.out.println("	    Start Read File : " + filename);
 		// Thread.sleep(4000);
 		File fl = new File(fnpath);
@@ -12929,8 +15817,12 @@ m++;
 //	Requirement for bam file lines is to have minimum word length;
 	public static Vector<String> readTheFileIncludeFirstLineWrdlen(String fnpath,
 			String filename, int wl) throws IOException, InterruptedException {
+//	wl = the number of words in bam line : readname chromosome ...
+//	introduced to exclude lines with insufficient information
 		System.out.println("	    Start ReadTheFile method");
+		System.out.println("	    Start Read File : " + fnpath);
 		System.out.println("	    Start Read File : " + filename);
+
 		// Thread.sleep(4000);
 		File fl = new File(fnpath);
 		Vector<String> vct = new Vector<String>();
@@ -12979,6 +15871,7 @@ m++;
 	{
 
 		System.out.println("	    Start ReadTheFile method");
+		System.out.println("	    Start Read File : " + fnpath);
 		System.out.println("	    Start Read File : " + filename);
 		// Thread.sleep(4000);
 		File fl = new File(fnpath);
