@@ -1,58 +1,47 @@
-# source("/home/m026918/LeuGraphs/Pvalue_Mutrate01.r")
-#java LeucippusHQD0_O_T_G_169p_ref graph -type pvalue -tbdir /data5/experpath/vasm/vasm/NextGen/tomcat/apache-tomcat-7.0.42/Mosaics75/testtblgraphs/tables -grout /data5/experpath/vasm/vasm/NextGen/tomcat/apache-tomcat-7.0.42/Mosaics75/testtblgraphs/graphs/pvalue_graph.pdf -gprm /home/m026918/Leu031015mdy/sites_with_primer_starts_tst1.tsv
+# source("/home/m026918/Leucippus/Pvalue_Mutrate.r")
+# p-value-and-mutation-rate-rscript
 
-# src=/data5/experpath/vasm/vasm/NextGen/tomcat/apache-tomcat-7.0.42/Mosaics75/testtblgraphs/tables; dst=/data5/experpath/vasm/vasm/NextGen/tomcat/apache-tomcat-7.0.42/Mosaics75/testtblgraphs/graphs/pvalue_graph.pdf; tp=pvalue; ppth=/home/m026918/Leu031015mdy/sites_with_primer_starts_tst1.tsv; /usr/local/biotools/r/R-3.0.1/bin/Rscript /home/m026918/Leu031015mdy/Pvalue_Mutrate.r -s $src -d $dst -t $tp -p $ppth
+# arguments
+source = "";		# input table(s) one table or two for comparison
+			# case : one table : graph or posgraph
+			# case two tables  : graph
+			# if graph then use regular noise calculation
+			# if pos graph use only some restrictions
+			# there is not input for germline border in posgraph or 
+			# graph inclusion for noise : #reference/total)>
 
-# src=/data5/experpath/vasm/vasm/NextGen/tomcat/apache-tomcat-7.0.42/Mosaics75/testtblgraphs/tables; dst=/data5/experpath/vasm/vasm/NextGen/tomcat/apache-tomcat-7.0.42/Mosaics75/testtblgraphs/graphs/pvalue_graph09.pdf; tp=pvalue; /usr/local/biotools/r/R-3.0.1/bin/Rscript /home/m026918/fol5/Pvalue_Mutrate.r -s $src -d $dst -t $tp
-
-#src=/home/usnm/Desktop/Leucippus07012015/tables/i1_q_20_nd_all_.tsv,; dst=/home/usnm/Desktop/Leucippus07012015/grout; tp=pvalue; gt=groutfpval; ov=0; cov=0; gla=0.76; /usr/bin/Rscript /home/usnm/Desktop/Leucippus07012015/Pvalue_Mutrate.r -s $src -d $dst -t $tp -h $gt -o $ov -c $cov -l $gla
-
-#-s $src -d $dst -t $tp -p $ppth
-
-#rm(list=ls())
-
-# getopt library requirement was removed on 02/29/2016
-
-# install.packages("getopt")
-#library('getopt')     #// to install:  
-#spec = matrix(c( 'source'  , 's', 1, "character" , 
-#                'destination'  , 'd', 1, "character" ,
-#		 'type'  , 't', 1, "character",
-#		 'grortb'  , 'h', 1, "character",
-#		 'overlap'  , 'o', 1, "character",
-#		 'coverage'  , 'c', 1, "character",
-#		 'germlineAFs'  , 'l', 1, "character"),byrow=TRUE, ncol=4);
-
-#opt = getopt(spec); 
-#source  = opt$source;
-#destination = opt$destination;
-#graphortable = opt$grortb;
-#overlap = opt$overlap;
-#cover = strtoi(opt$coverage);
-#prf = as.numeric(opt$germlineAFs);
-#cover=cover-1
-#primers = opt$primers;
-#type = opt$type;
-
-
-#/usr/local/biotools/r/R-3.2.0/bin/Rscript /home/m026918/Leucippus/Test_R_Arguments/Pvalue_MutrateNoOpt.r src=/data5/experpath/vasm/vasm/NextGen/niko/MOSAICSALLDATA/i1_03_04_1_017_GTAGAG/tables/MosaicNoiseTable_BQ_gt_00.tsv,/data5/experpath/vasm/vasm/NextGen/niko/MOSAICSALLDATA/i1_03_04_1_017_GTAGAG/tables/MosaicNoiseTable_BQ_gt_20.tsv dst=/home/m026918/Leucippus/ppapue_graph.pdf tp=pvalue gt=grout ov=0 gla=0.99 cov=100
-
-#java Leucippus graph -type pvalue -coverage 100 -range 0.05 -overlap 100 -o ppvalout0007 /data5/experpath/vasm/vasm/NextGen/niko/MOSAICSALLDATA/i1_03_04_1_017_GTAGAG/tables/MosaicNoiseTable_BQ_gt_00.tsv
-
-
-# getopt library requirement was removed on 02/29/2016
-source = "";
-destination = "";
-graphortable = "";
-overlap = "";
-coverage = "";
+destination = ""; 	# output graph file
+graphortable = "";	# remnand from previousp value option(used particular loop)
+#overlaps = "";		# restricts xval, yval to be greater than overlap (string)
+overlap = "";		# restricts xval, yval to be greater than overlap (string)
+coverage = "";		# user customizable restriction (seems it is working)
+ranges="";
+range = 0;		# numeric variable for error cutoff(#alternative/total)
+			# reforms the shape(x inclusion and extension)
+type = "";		# pvalue or mutation rate
+curarg="";		# in followng loop : stores curent argument as a string 
+curargvc=c("");		# current argument array : is used when agument contains
+			# two variables (split when "=" is present in name and value)
+cover=0;		# user customizable numeric variable for coverage-restiction.
+  
 prf = 0;
-type = "";
-curarg="";
-curargvc=c("");
-cover=0;
-
 args <- commandArgs(trailingOnly = TRUE)
+
+
+# source = "";
+# destination = "";
+# graphortable = "";
+# overlap = "";
+# coverage = "";
+# prf = 0;
+# type = "";
+# curarg="";
+# curargvc=c("");
+# cover=0;
+# ranges=""
+# range=0
+
+#args <- commandArgs(trailingOnly = TRUE)
 #print("here");
 #print(args[1]);
 #print(args[2]);
@@ -107,140 +96,129 @@ for (i in 1:length(args))
 		if(curargvc[1]=="gla")
 		{
 			germlineAFs=curargvc[2];
-			prf = as.numeric(germlineAFs);
+			# prf = as.numeric(germlineAFs);
 			print(prf);
+		}
+
+		if(curargvc[1]=="rng")
+		{
+			ranges=curargvc[2];
+			range = as.numeric(ranges);
+			prf = as.numeric(ranges);
+
+			print(paste("range : ",  range, sep=""))
 		}
 	}
 }
+
+# range = prf
+#prf=0.95
+if (range==0)
+range = 0.005
 cover=cover-1
-#primers = opt$primers;
 oneortwo=0;
 # print(graphortable)
 
-# sourcepath = "/data5/experpath/vasm/vasm/NextGen/tomcat/apache-tomcat-7.0.42/MosaicsTablesGraphs021115mdy/i1/Tables/nd";
-# destination = "/data5/experpath/vasm/vasm/NextGen/tomcat/apache-tomcat-7.0.42/MosaicsTablesGraphs021115mdy/i1/Tables/GraphTest"
-# primers = "/home/m026918/LeuGraphs/primers.tsv"
-# type = "pvalue";
-
-# exclude site of interest
-# prdfrm <- read.table(primers, sep="\t",na.strings = "NA",header = FALSE)
-# prmsint = prdfrm[,2]
-# prsichrm = prdfrm[,1]
-# excl= paste(prdfrm[,1], " ", prdfrm[,2], sep="") 
-
 # put all table names to a vector
-
-#/usr/local/biotools/r/R-3.2.0/bin/Rscript /home/m026918/Leucippus/Test_R_Arguments/Pvalue_MutrateNoOpt.r src=/data5/experpath/vasm/vasm/NextGen/niko/MOSAICSALLDATA/i1_03_04_1_017_GTAGAG/tables/MosaicNoiseTable_BQ_gt_00.tsv,/data5/experpath/vasm/vasm/NextGen/niko/MOSAICSALLDATA/i1_03_04_1_017_GTAGAG/tables/MosaicNoiseTable_BQ_gt_20.tsv dst=/home/m026918/Leucippus/ppapue_graph.pdf tp=pvalue gt=grout ov=0 gla=0.99 cov=100
 
 splat <- strsplit(source, ",")[[1]]
 tblnms=c();
 nmOfiles=0;
+
 for(i in 1:length(splat))
 {
 	tblnms = c(tblnms, basename(splat[i]))
 }
 
 nmOfiles=length(splat);
+
 if(nmOfiles == 2)
 {
 	print("Table files are two!");
 	oneortwo=2;
 }
+
 if(nmOfiles == 1)
 {
 	print("Only one Table file.");
 	oneortwo=1;
 }
 
+#create a list vector to hold the data frames of each table as its elements
 print(length(splat));
 vectorOfTables <- vector(mode = "list", length = length(splat));
 
+# populate list-data-frames
+# Error generated because R converts String Values of Single Capital Ts to logic TRUE
+# Now all data frame values initial are converted to characters and later the numeric 
+# columns are converted to numeric values  
 for(i in 1:length(splat))
 {
-	dfrm <- read.table(splat[i],sep="\t",na.strings = "NA",header = TRUE)
+	dfrm <- read.table(splat[i],sep="\t",na.strings = "NA",header = TRUE, colClasses = "character")
 	vectorOfTables[[i]] <- dfrm
 }
 
-# create a list vector to hold the data frames of each table as its elements
-
 i=0
-# Save table names to put them in the y label
-
-# index <- c(1,2,3)
-#4,5,6)
-#qual <- c("-1", "10", "20", "30", "40", "50")
-xl=c(-0.0001,0.005)
+xl=c(-0.0001,range)
 yl=c(0,10000)
 #brk <- seq(0,0.005, 6.25e-5)
-brk <- seq(0,0.005, 6.25e-5)
+brk <- seq(0,range, 6.25e-5)
 xval=overlap
 yval=overlap
-j=0
-i=1
-lf=1
+j=0;
+i=1;
+lf=1;
 # exclude site
 # Reference  > 95%
 # Quality 0 to 50 AC AT AG, TG TA TC, CA CT CG, GT GA GC
 
-#pdf(paste(tbdestination_i1_i6, "i1_i6_PVal_New_vs_Old_ex_st_rf_gt_95_qual_", qual[1], "_", qual[6],  "_noise_hist_A_T_C_G_.pdf", sep=""), width=11, height=8.5)
-#pdf(paste(tbdestination_niko, "New_PVal_log2_Niko_vs_Old_ex_st_rf_gt_95_qual_", qual[1], "_", qual[6],  "_noise_hist_A_T_C_G_sc1123.pdf", sep=""), width=11, height=8.5)
-
-#pdf(paste(i1_tbdestination, "/PVal_log_0-0p005_Y-0-3_NewData_vs_Old_alexej_ex_st_rf_gt_95_st_gt99_qual_", qual[1], "_", qual[6],  "_noise_hist_A_T_C_G_sc1123.pdf", sep=""), width=11, height=8.5)
-
-
-#pdf(paste(tbdestination_nd, "r1_", qual[1], "_", qual[6],  "_noise.pdf", sep=""), width=11, height=8.5)
-#print("after PDF file")
-
-#pdf(paste(destination, "/TestPValue_nd_nd_ex_st_rf_gt_65_st_gt99_qual_", qual[1], "_", qual[6],  "_A_T_C_G_ref.pdf", sep=""), width=11, height=8.5)
-
-if ((graphortable=="groutfpval") | (graphortable=="grout"))
+if ((graphortable=="groutfpval") | (graphortable=="grout") | (graphortable=="posgrout"))
 {
 	pdf(paste(destination, ".pdf", sep=""), width=11, height=8.5)
 }
 #setwd("C:\\Users\\m026918\\Desktop");
 #prf=0.95 # percentage of reference
 #prf=0.55 # percentage of reference
-
+# Ctreate Comparison empirical pvalue graphs
 if( (oneortwo==2) & (type=="pvalue") & ( (graphortable=="groutfpval") | (graphortable=="grout") ) )
 {
+#----------------
+	prf=0.95
+#----------------
 	old.par <- par(mfrow=c(1, 1))
-	#setwd(tbsource_i1_i6);
-	#dfrm <- read.table(tblnms_i1-i6[i],sep="\t",na.strings = "NA",header = TRUE)
+	print("comparison pvalue graph 2");
 	dfrm <- vectorOfTables[[1]]
+	nbe  <- as.numeric(dfrm$number_base_expected);
+	dfrm <- subset(dfrm, nbe>0);
 	chr  <- dfrm$chromosome;
-	site <- dfrm$site;
-	chrsite=paste(chr, " ", site, sep="")
-
-		#dfrm=subset(dfrm, !chrsite%in%excl) # excludes the sites of interest excl is a vector generated from the primers file(element : chr, space, site of interest. exemple : "2 2345673" means chromosome: 2 site: 2345673
-		print(1)
-	tA   <- dfrm$number_of_As;
-	tC   <- dfrm$number_of_Cs;
-	tT   <- dfrm$number_of_Ts;
-	tG   <- dfrm$number_of_Gs;
-	nbe  <- dfrm$number_base_expected;
-	xv   <- dfrm$x;
 	be   <- dfrm$base_expected;
-	yv   <- dfrm$y;
 	alt  <- dfrm$alternative;
-	chr  <- dfrm$chromosome;
-	site <- dfrm$site; 
-	dv = nbe
+	site <- as.numeric(dfrm$site);
+	tA   <- as.numeric(dfrm$number_of_As);
+	tC   <- as.numeric(dfrm$number_of_Cs);
+	tT   <- as.numeric(dfrm$number_of_Ts);
+	tG   <- as.numeric(dfrm$number_of_Gs);
+	nbe  <- as.numeric(dfrm$number_base_expected);
+	xv   <- as.numeric(dfrm$x);
+	yv   <- as.numeric(dfrm$y);
+	dv = nbe;
+	print("table 1");
 
-	sbt_ac <- subset(tC/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # red
-	sbt_at <- subset(tT/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # blue 
-	sbt_ag <- subset(tG/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # green
+	sbt_ac <- subset(tC/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # red
+	sbt_at <- subset(tT/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # blue 
+	sbt_ag <- subset(tG/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # green
 
-	sbt_tg <- subset(tG/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # purple
-	sbt_ta <- subset(tA/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # cyan
-	sbt_tc <- subset(tC/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # orange
+	sbt_tg <- subset(tG/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # purple
+	sbt_ta <- subset(tA/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # cyan
+	sbt_tc <- subset(tC/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # orange
 
-	sbt_ca <- subset(tA/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # red 
-	sbt_ct <- subset(tT/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # blue 
-	sbt_cg <- subset(tG/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # green
+	sbt_ca <- subset(tA/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # red 
+	sbt_ct <- subset(tT/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # blue 
+	sbt_cg <- subset(tG/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # green
 
-	sbt_gt <- subset(tT/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # purple
-	sbt_ga <- subset(tA/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # cyan 
-	sbt_gc <- subset(tC/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # orange
+	sbt_gt <- subset(tT/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # purple
+	sbt_ga <- subset(tA/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # cyan 
+	sbt_gc <- subset(tC/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # orange
 
 	sbt_ac.cut = cut(sbt_ac, brk, right=FALSE)
 	sbt_ac.freq = table(sbt_ac.cut)
@@ -326,43 +304,39 @@ if( (oneortwo==2) & (type=="pvalue") & ( (graphortable=="groutfpval") | (graphor
 	sbt_gc1 = cumfreq0/sumfreq0
 	sbt_gc1_p = 1-cumfreq0/sumfreq0
 
-
-
 	dfrm <- vectorOfTables[[2]]
+	nbe  <- as.numeric(dfrm$number_base_expected);
+	dfrm <- subset(dfrm, nbe>0);
 	chr  <- dfrm$chromosome;
-	site <- dfrm$site;
-	chrsite=paste(chr, " ", site, sep="")
-
-		#dfrm=subset(dfrm, !chrsite%in%excl) # excludes the sites of interest excl is a vector generated from the primers file(element : chr, space, site of interest. exemple : "2 2345673" means chromosome: 2 site: 2345673
-		print(2)
-	tA   <- dfrm$number_of_As;
-	tC   <- dfrm$number_of_Cs;
-	tT   <- dfrm$number_of_Ts;
-	tG   <- dfrm$number_of_Gs;
-	nbe  <- dfrm$number_base_expected;
-	xv   <- dfrm$x;
 	be   <- dfrm$base_expected;
-	yv   <- dfrm$y;
 	alt  <- dfrm$alternative;
-	chr  <- dfrm$chromosome;
-	site <- dfrm$site; 
-	dv = nbe
+	site <- as.numeric(dfrm$site);
+	tA   <- as.numeric(dfrm$number_of_As);
+	tC   <- as.numeric(dfrm$number_of_Cs);
+	tT   <- as.numeric(dfrm$number_of_Ts);
+	tG   <- as.numeric(dfrm$number_of_Gs);
+	nbe  <- as.numeric(dfrm$number_base_expected);
+	xv   <- as.numeric(dfrm$x);
+	yv   <- as.numeric(dfrm$y);
+	dv = nbe;
 
-	sbt_ac <- subset(tC/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # red
-	sbt_at <- subset(tT/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # blue 
-	sbt_ag <- subset(tG/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # green
+	print("table 2");
 
-	sbt_tg <- subset(tG/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # purple
-	sbt_ta <- subset(tA/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # cyan
-	sbt_tc <- subset(tC/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # orange
+	sbt_ac <- subset(tC/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # red
+	sbt_at <- subset(tT/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # blue 
+	sbt_ag <- subset(tG/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # green
 
-	sbt_ca <- subset(tA/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # red 
-	sbt_ct <- subset(tT/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # blue 
-	sbt_cg <- subset(tG/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # green
+	sbt_tg <- subset(tG/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # purple
+	sbt_ta <- subset(tA/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # cyan
+	sbt_tc <- subset(tC/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # orange
 
-	sbt_gt <- subset(tT/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # purple
-	sbt_ga <- subset(tA/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # cyan 
-	sbt_gc <- subset(tC/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # orange
+	sbt_ca <- subset(tA/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # red 
+	sbt_ct <- subset(tT/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # blue 
+	sbt_cg <- subset(tG/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # green
+
+	sbt_gt <- subset(tT/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # purple
+	sbt_ga <- subset(tA/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # cyan 
+	sbt_gc <- subset(tC/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # orange
 
 	sbt_ac.cut = cut(sbt_ac, brk, right=FALSE)
 	sbt_ac.freq = table(sbt_ac.cut)
@@ -507,43 +481,43 @@ if (is.null(cover))
 if( (oneortwo==1)  & (type=="pvalue") & ( (graphortable=="groutfpval") | (graphortable=="grout") ))
 {
 	old.par <- par(mfrow=c(1, 1))
-	#setwd(tbsource_i1_i6);
-	#dfrm <- read.table(tblnms_i1-i6[i],sep="\t",na.strings = "NA",header = TRUE)
+	
+#----------------
+	prf=0.95
+#----------------
 	dfrm <- vectorOfTables[[1]]
+	nbe  <- as.numeric(dfrm$number_base_expected);
+	dfrm <- subset(dfrm, nbe>0);
 	chr  <- dfrm$chromosome;
-	site <- dfrm$site;
-	chrsite=paste(chr, " ", site, sep="")
-
-	#dfrm=subset(dfrm, !chrsite%in%excl) # excludes the sites of interest excl is a vector generated from the primers file(element : chr, space, site of interest. exemple : "2 2345673" means chromosome: 2 site: 2345673
-	print(i)
-	tA   <- dfrm$number_of_As;
-	tC   <- dfrm$number_of_Cs;
-	tT   <- dfrm$number_of_Ts;
-	tG   <- dfrm$number_of_Gs;
-	nbe  <- dfrm$number_base_expected;
-	xv   <- dfrm$x;
 	be   <- dfrm$base_expected;
-	yv   <- dfrm$y;
 	alt  <- dfrm$alternative;
-	chr  <- dfrm$chromosome;
-	site <- dfrm$site; 
+	site <- as.numeric(dfrm$site);
+	tA   <- as.numeric(dfrm$number_of_As);
+	tC   <- as.numeric(dfrm$number_of_Cs);
+	tT   <- as.numeric(dfrm$number_of_Ts);
+	tG   <- as.numeric(dfrm$number_of_Gs);
+	nbe  <- as.numeric(dfrm$number_base_expected);
+	xv   <- as.numeric(dfrm$x);
+	yv   <- as.numeric(dfrm$y);
 	dv = nbe
 
-	sbt_ac <- subset(tC/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # red
-	sbt_at <- subset(tT/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # blue 
-	sbt_ag <- subset(tG/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # green
+	print("table 1");
 
-	sbt_tg <- subset(tG/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # purple
-	sbt_ta <- subset(tA/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # cyan
-	sbt_tc <- subset(tC/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # orange
+	sbt_ac <- subset(tC/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # red
+	sbt_at <- subset(tT/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # blue 
+	sbt_ag <- subset(tG/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # green
 
-	sbt_ca <- subset(tA/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # red 
-	sbt_ct <- subset(tT/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # blue 
-	sbt_cg <- subset(tG/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # green
+	sbt_tg <- subset(tG/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # purple
+	sbt_ta <- subset(tA/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # cyan
+	sbt_tc <- subset(tC/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # orange
 
-	sbt_gt <- subset(tT/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # purple
-	sbt_ga <- subset(tA/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # cyan 
-	sbt_gc <- subset(tC/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # orange
+	sbt_ca <- subset(tA/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # red 
+	sbt_ct <- subset(tT/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # blue 
+	sbt_cg <- subset(tG/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # green
+
+	sbt_gt <- subset(tT/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # purple
+	sbt_ga <- subset(tA/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # cyan 
+	sbt_gc <- subset(tC/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # orange
 
 	sbt_ac.cut = cut(sbt_ac, brk, right=FALSE)
 	sbt_ac.freq = table(sbt_ac.cut)
@@ -679,27 +653,27 @@ if( (oneortwo==1)  & (type=="pvalue") & ( (graphortable=="groutfpval") | (grapho
 if( (oneortwo==2) & (type=="mutrate") & ( (graphortable=="groutfpval") | (graphortable=="grout") ))
 {
 	old.par <- par(mfrow=c(1, 1))
-	#setwd(tbsource_i1_i6);
-	#dfrm <- read.table(tblnms_i1-i6[i],sep="\t",na.strings = "NA",header = TRUE)
+	
+#----------------
+	prf=0.95
+#----------------
 	dfrm <- vectorOfTables[[1]]
+	nbe  <- as.numeric(dfrm$number_base_expected);
+	dfrm <- subset(dfrm, nbe>0);
 	chr  <- dfrm$chromosome;
-	site <- dfrm$site;
-	chrsite=paste(chr, " ", site, sep="")
-
-		#dfrm=subset(dfrm, !chrsite%in%excl) # excludes the sites of interest excl is a vector generated from the primers file(element : chr, space, site of interest. exemple : "2 2345673" means chromosome: 2 site: 2345673
-		print(1)
-	tA   <- dfrm$number_of_As;
-	tC   <- dfrm$number_of_Cs;
-	tT   <- dfrm$number_of_Ts;
-	tG   <- dfrm$number_of_Gs;
-	nbe  <- dfrm$number_base_expected;
-	xv   <- dfrm$x;
 	be   <- dfrm$base_expected;
-	yv   <- dfrm$y;
 	alt  <- dfrm$alternative;
-	chr  <- dfrm$chromosome;
-	site <- dfrm$site; 
+	site <- as.numeric(dfrm$site);
+	tA   <- as.numeric(dfrm$number_of_As);
+	tC   <- as.numeric(dfrm$number_of_Cs);
+	tT   <- as.numeric(dfrm$number_of_Ts);
+	tG   <- as.numeric(dfrm$number_of_Gs);
+	nbe  <- as.numeric(dfrm$number_base_expected);
+	xv   <- as.numeric(dfrm$x);
+	yv   <- as.numeric(dfrm$y);
 	dv = nbe
+
+	print("table 1");
 
 	sbt_ac <- subset(tC/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # red
 	sbt_at <- subset(tT/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # blue 
@@ -735,40 +709,38 @@ if( (oneortwo==2) & (type=="mutrate") & ( (graphortable=="groutfpval") | (grapho
 	h43 <- hist(sbt_gc, breaks=brk, plot=FALSE)		# gc-cg
 
 	dfrm <- vectorOfTables[[2]]
+	nbe  <- as.numeric(dfrm$number_base_expected);
+	dfrm <- subset(dfrm, nbe>0);
 	chr  <- dfrm$chromosome;
-	site <- dfrm$site;
-	chrsite=paste(chr, " ", site, sep="")
-
-		#dfrm=subset(dfrm, !chrsite%in%excl) # excludes the sites of interest excl is a vector generated from the primers file(element : chr, space, site of interest. exemple : "2 2345673" means chromosome: 2 site: 2345673
-		print(2)
-	tA   <- dfrm$number_of_As;
-	tC   <- dfrm$number_of_Cs;
-	tT   <- dfrm$number_of_Ts;
-	tG   <- dfrm$number_of_Gs;
-	nbe  <- dfrm$number_base_expected;
-	xv   <- dfrm$x;
 	be   <- dfrm$base_expected;
-	yv   <- dfrm$y;
 	alt  <- dfrm$alternative;
-	chr  <- dfrm$chromosome;
-	site <- dfrm$site; 
+	site <- as.numeric(dfrm$site);
+	tA   <- as.numeric(dfrm$number_of_As);
+	tC   <- as.numeric(dfrm$number_of_Cs);
+	tT   <- as.numeric(dfrm$number_of_Ts);
+	tG   <- as.numeric(dfrm$number_of_Gs);
+	nbe  <- as.numeric(dfrm$number_base_expected);
+	xv   <- as.numeric(dfrm$x);
+	yv   <- as.numeric(dfrm$y);
 	dv = nbe
 
-	sbt_ac <- subset(tC/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # red
-	sbt_at <- subset(tT/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # blue 
-	sbt_ag <- subset(tG/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # green
+	print("table 2");
 
-	sbt_tg <- subset(tG/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # purple
-	sbt_ta <- subset(tA/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # cyan
-	sbt_tc <- subset(tC/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # orange
+	sbt_ac <- subset(tC/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # red
+	sbt_at <- subset(tT/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # blue 
+	sbt_ag <- subset(tG/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # green
 
-	sbt_ca <- subset(tA/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # red 
-	sbt_ct <- subset(tT/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # blue 
-	sbt_cg <- subset(tG/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # green
+	sbt_tg <- subset(tG/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # purple
+	sbt_ta <- subset(tA/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # cyan
+	sbt_tc <- subset(tC/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # orange
 
-	sbt_gt <- subset(tT/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # purple
-	sbt_ga <- subset(tA/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # cyan 
-	sbt_gc <- subset(tC/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # orange
+	sbt_ca <- subset(tA/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # red 
+	sbt_ct <- subset(tT/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # blue 
+	sbt_cg <- subset(tG/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # green
+
+	sbt_gt <- subset(tT/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # purple
+	sbt_ga <- subset(tA/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # cyan 
+	sbt_gc <- subset(tC/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # orange
 
 	ho11 <- hist(sbt_ac, breaks=brk, plot=FALSE)		# ac-tg
 	ho12 <- hist(sbt_at, breaks=brk, plot=FALSE)		# at-ta
@@ -823,43 +795,44 @@ if( (oneortwo==2) & (type=="mutrate") & ( (graphortable=="groutfpval") | (grapho
 if( (oneortwo==1)  & (type=="mutrate")  & ( (graphortable=="groutfpval") | (graphortable=="grout") ) )
 {
 	old.par <- par(mfrow=c(1, 1))
-	#setwd(tbsource_i1_i6);
-	#dfrm <- read.table(tblnms_i1-i6[i],sep="\t",na.strings = "NA",header = TRUE)
-	dfrm <- vectorOfTables[[1]]
-	chr  <- dfrm$chromosome;
-	site <- dfrm$site;
-	chrsite=paste(chr, " ", site, sep="")
 
-	#dfrm=subset(dfrm, !chrsite%in%excl) # excludes the sites of interest excl is a vector generated from the primers file(element : chr, space, site of interest. exemple : "2 2345673" means chromosome: 2 site: 2345673
-		print(i)
-	tA   <- dfrm$number_of_As;
-	tC   <- dfrm$number_of_Cs;
-	tT   <- dfrm$number_of_Ts;
-	tG   <- dfrm$number_of_Gs;
-	nbe  <- dfrm$number_base_expected;
-	xv   <- dfrm$x;
-	be   <- dfrm$base_expected;
-	yv   <- dfrm$y;
-	alt  <- dfrm$alternative;
+	
+#----------------
+	prf=0.95
+#----------------	
+	dfrm0 <- vectorOfTables[[1]]
+	nbe  <- as.numeric(dfrm$number_base_expected);
+	dfrm <- subset(dfrm, nbe>0);
 	chr  <- dfrm$chromosome;
-	site <- dfrm$site; 
+	be   <- dfrm$base_expected;
+	alt  <- dfrm$alternative;
+	site <- as.numeric(dfrm$site);
+	tA   <- as.numeric(dfrm$number_of_As);
+	tC   <- as.numeric(dfrm$number_of_Cs);
+	tT   <- as.numeric(dfrm$number_of_Ts);
+	tG   <- as.numeric(dfrm$number_of_Gs);
+	nbe  <- as.numeric(dfrm$number_base_expected);
+	xv   <- as.numeric(dfrm$x);
+	yv   <- as.numeric(dfrm$y);
 	dv = nbe
 
-	sbt_ac <- subset(tC/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # red
-	sbt_at <- subset(tT/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # blue 
-	sbt_ag <- subset(tG/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # green
+	print(1)
 
-	sbt_tg <- subset(tG/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # purple
-	sbt_ta <- subset(tA/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # cyan
-	sbt_tc <- subset(tC/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # orange
+	sbt_ac <- subset(tC/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # red
+	sbt_at <- subset(tT/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # blue 
+	sbt_ag <- subset(tG/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # green
 
-	sbt_ca <- subset(tA/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # red 
-	sbt_ct <- subset(tT/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # blue 
-	sbt_cg <- subset(tG/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # green
+	sbt_tg <- subset(tG/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # purple
+	sbt_ta <- subset(tA/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # cyan
+	sbt_tc <- subset(tC/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # orange
 
-	sbt_gt <- subset(tT/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # purple
-	sbt_ga <- subset(tA/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # cyan 
-	sbt_gc <- subset(tC/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # orange
+	sbt_ca <- subset(tA/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # red 
+	sbt_ct <- subset(tT/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # blue 
+	sbt_cg <- subset(tG/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # green
+
+	sbt_gt <- subset(tT/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # purple
+	sbt_ga <- subset(tA/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # cyan 
+	sbt_gc <- subset(tC/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # orange
 
 	h11 <- hist(sbt_ac, breaks=brk, plot=FALSE)		# ac-tg
 	h12 <- hist(sbt_at, breaks=brk, plot=FALSE)		# at-ta
@@ -908,7 +881,7 @@ if((oneortwo==1)  &  ((graphortable=="groutfpval") | (graphortable=="fpval")) )
 	#destination = "C:\\Users\\m026918\\Desktop\\dest\\table\\"
 
 	#dfrm <- read.table(source,sep="\t",na.strings = "NA",header = TRUE)
-	dfrm <- vectorOfTables[[1]]
+	
 	yl=c(0,10000)
 	#	brk <- seq(0,0.005, 6.25e-5)
 	#	brk <- seq(0,1.0, 10e-5)
@@ -919,22 +892,24 @@ if((oneortwo==1)  &  ((graphortable=="groutfpval") | (graphortable=="fpval")) )
 ##	yval=0
 	j=0
 
-	chr  <- dfrm$chromosome;
-	site <- dfrm$site;
+	##chr  <- dfrm$chromosome;
+	##site <- dfrm$site;
 	#chrsite=paste(chr, " ", site, sep="")
 	# dfrm=subset(dfrm, !chrsite%in%excl) # excludes the sites of interest excl is a vector generated from the primers file(element : chr, space, site of interest. exemple : "2 2345673" means chromosome: 2 site: 2345673
-	
-	tA   <- dfrm$number_of_As;
-	tC   <- dfrm$number_of_Cs;
-	tT   <- dfrm$number_of_Ts;
-	tG   <- dfrm$number_of_Gs;
-	nbe  <- dfrm$number_base_expected;
-	xv   <- dfrm$x;
-	be   <- dfrm$base_expected;
-	yv   <- dfrm$y;
-	alt  <- dfrm$alternative;
+	dfrm <- vectorOfTables[[1]]
+	nbe  <- as.numeric(dfrm$number_base_expected);
+	dfrm <- subset(dfrm, nbe>0);
 	chr  <- dfrm$chromosome;
-	site <- dfrm$site; 
+	be   <- dfrm$base_expected;
+	alt  <- dfrm$alternative;
+	site <- as.numeric(dfrm$site);
+	tA   <- as.numeric(dfrm$number_of_As);
+	tC   <- as.numeric(dfrm$number_of_Cs);
+	tT   <- as.numeric(dfrm$number_of_Ts);
+	tG   <- as.numeric(dfrm$number_of_Gs);
+	nbe  <- as.numeric(dfrm$number_base_expected);
+	xv   <- as.numeric(dfrm$x);
+	yv   <- as.numeric(dfrm$y);
 	dv = nbe;
 	crlimit=1.5
 
@@ -952,21 +927,21 @@ if((oneortwo==1)  &  ((graphortable=="groutfpval") | (graphortable=="fpval")) )
 	j=0
 	i=1
 
-sbt_ac <- subset(tC/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # red
-sbt_at <- subset(tT/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # blue 
-sbt_ag <- subset(tG/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # green
+sbt_ac <- subset(tC/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # red
+sbt_at <- subset(tT/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # blue 
+sbt_ag <- subset(tG/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # green
 
-sbt_tg <- subset(tG/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # purple
-sbt_ta <- subset(tA/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # cyan
-sbt_tc <- subset(tC/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # orange
+sbt_tg <- subset(tG/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # purple
+sbt_ta <- subset(tA/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # cyan
+sbt_tc <- subset(tC/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # orange
 
-sbt_ca <- subset(tA/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # red 
-sbt_ct <- subset(tT/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # blue 
-sbt_cg <- subset(tG/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # green
+sbt_ca <- subset(tA/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # red 
+sbt_ct <- subset(tT/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # blue 
+sbt_cg <- subset(tG/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # green
 
-sbt_gt <- subset(tT/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # purple
-sbt_ga <- subset(tA/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # cyan 
-sbt_gc <- subset(tC/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # orange
+sbt_gt <- subset(tT/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # purple
+sbt_ga <- subset(tA/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # cyan 
+sbt_gc <- subset(tC/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # orange
 
 	sbt_ac.cut = cut(sbt_ac, brk)
 #	, right=FALSE) 
@@ -1105,7 +1080,7 @@ if((oneortwo==2)  &  ((graphortable=="groutfpval") | (graphortable=="fpval")) )
 	#destination = "C:\\Users\\m026918\\Desktop\\dest\\table\\"
 
 	#dfrm <- read.table(source,sep="\t",na.strings = "NA",header = TRUE)
-	dfrm <- vectorOfTables[[1]]
+
 	yl=c(0,10000)
 	#	brk <- seq(0,0.005, 6.25e-5)
 	#	brk <- seq(0,1.0, 10e-5)
@@ -1116,22 +1091,24 @@ if((oneortwo==2)  &  ((graphortable=="groutfpval") | (graphortable=="fpval")) )
 ##	yval=0
 	j=0
 
-	chr  <- dfrm$chromosome;
-	site <- dfrm$site;
+	#chr  <- dfrm$chromosome;
+	#site <- dfrm$site;
 	#chrsite=paste(chr, " ", site, sep="")
 	# dfrm=subset(dfrm, !chrsite%in%excl) # excludes the sites of interest excl is a vector generated from the primers file(element : chr, space, site of interest. exemple : "2 2345673" means chromosome: 2 site: 2345673
-	
-	tA   <- dfrm$number_of_As;
-	tC   <- dfrm$number_of_Cs;
-	tT   <- dfrm$number_of_Ts;
-	tG   <- dfrm$number_of_Gs;
-	nbe  <- dfrm$number_base_expected;
-	xv   <- dfrm$x;
-	be   <- dfrm$base_expected;
-	yv   <- dfrm$y;
-	alt  <- dfrm$alternative;
+	dfrm <- vectorOfTables[[1]]
+	nbe  <- as.numeric(dfrm$number_base_expected);
+	dfrm <- subset(dfrm, nbe>0);
 	chr  <- dfrm$chromosome;
-	site <- dfrm$site; 
+	be   <- dfrm$base_expected;
+	alt  <- dfrm$alternative;
+	site <- as.numeric(dfrm$site);
+	tA   <- as.numeric(dfrm$number_of_As);
+	tC   <- as.numeric(dfrm$number_of_Cs);
+	tT   <- as.numeric(dfrm$number_of_Ts);
+	tG   <- as.numeric(dfrm$number_of_Gs);
+	nbe  <- as.numeric(dfrm$number_base_expected);
+	xv   <- as.numeric(dfrm$x);
+	yv   <- as.numeric(dfrm$y);
 	dv = nbe;
 	crlimit=1.5
 
@@ -1149,21 +1126,21 @@ if((oneortwo==2)  &  ((graphortable=="groutfpval") | (graphortable=="fpval")) )
 	j=0
 	i=1
 
-sbt_ac <- subset(tC/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # red
-sbt_at <- subset(tT/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # blue 
-sbt_ag <- subset(tG/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # green
+sbt_ac <- subset(tC/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # red
+sbt_at <- subset(tT/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # blue 
+sbt_ag <- subset(tG/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # green
 
-sbt_tg <- subset(tG/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # purple
-sbt_ta <- subset(tA/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # cyan
-sbt_tc <- subset(tC/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # orange
+sbt_tg <- subset(tG/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # purple
+sbt_ta <- subset(tA/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # cyan
+sbt_tc <- subset(tC/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # orange
 
-sbt_ca <- subset(tA/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # red 
-sbt_ct <- subset(tT/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # blue 
-sbt_cg <- subset(tG/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # green
+sbt_ca <- subset(tA/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # red 
+sbt_ct <- subset(tT/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # blue 
+sbt_cg <- subset(tG/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # green
 
-sbt_gt <- subset(tT/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # purple
-sbt_ga <- subset(tA/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # cyan 
-sbt_gc <- subset(tC/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # orange
+sbt_gt <- subset(tT/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # purple
+sbt_ga <- subset(tA/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # cyan 
+sbt_gc <- subset(tC/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # orange
 
 	sbt_ac.cut = cut(sbt_ac, brk)
 #	, right=FALSE) 
@@ -1296,26 +1273,28 @@ sbt_gc <- subset(tC/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tC
 
 
 
-	dfrm <- vectorOfTables[[2]]
+	
 ##	xval=0
 ##	yval=0
 	j=0
-	chr  <- dfrm$chromosome;
-	site <- dfrm$site;
+	#chr  <- dfrm$chromosome;
+	#site <- dfrm$site;
 	#chrsite=paste(chr, " ", site, sep="")
 	# dfrm=subset(dfrm, !chrsite%in%excl) # excludes the sites of interest excl is a vector generated from the primers file(element : chr, space, site of interest. exemple : "2 2345673" means chromosome: 2 site: 2345673
-	
-	tA   <- dfrm$number_of_As;
-	tC   <- dfrm$number_of_Cs;
-	tT   <- dfrm$number_of_Ts;
-	tG   <- dfrm$number_of_Gs;
-	nbe  <- dfrm$number_base_expected;
-	xv   <- dfrm$x;
-	be   <- dfrm$base_expected;
-	yv   <- dfrm$y;
-	alt  <- dfrm$alternative;
+	dfrm <- vectorOfTables[[2]]
+	nbe  <- as.numeric(dfrm$number_base_expected);
+	dfrm <- subset(dfrm, nbe>0);
 	chr  <- dfrm$chromosome;
-	site <- dfrm$site; 
+	be   <- dfrm$base_expected;
+	alt  <- dfrm$alternative;
+	site <- as.numeric(dfrm$site);
+	tA   <- as.numeric(dfrm$number_of_As);
+	tC   <- as.numeric(dfrm$number_of_Cs);
+	tT   <- as.numeric(dfrm$number_of_Ts);
+	tG   <- as.numeric(dfrm$number_of_Gs);
+	nbe  <- as.numeric(dfrm$number_base_expected);
+	xv   <- as.numeric(dfrm$x);
+	yv   <- as.numeric(dfrm$y);
 	dv = nbe;
 	crlimit=1.5
 
@@ -1326,21 +1305,21 @@ sbt_gc <- subset(tC/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tC
 	j=0
 	i=1
 
-sbt_ac <- subset(tC/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # red
-sbt_at <- subset(tT/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # blue 
-sbt_ag <- subset(tG/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # green
+sbt_ac <- subset(tC/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # red
+sbt_at <- subset(tT/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # blue 
+sbt_ag <- subset(tG/dv, (be=='A' & alt=='A' & tA/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # green
 
-sbt_tg <- subset(tG/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # purple
-sbt_ta <- subset(tA/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # cyan
-sbt_tc <- subset(tC/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # orange
+sbt_tg <- subset(tG/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # purple
+sbt_ta <- subset(tA/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # cyan
+sbt_tc <- subset(tC/dv, (be=='T' & alt=='T' & tT/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # orange
 
-sbt_ca <- subset(tA/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # red 
-sbt_ct <- subset(tT/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # blue 
-sbt_cg <- subset(tG/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # green
+sbt_ca <- subset(tA/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # red 
+sbt_ct <- subset(tT/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # blue 
+sbt_cg <- subset(tG/dv, (be=='C' & alt=='C' & tC/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # green
 
-sbt_gt <- subset(tT/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # purple
-sbt_ga <- subset(tA/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # cyan 
-sbt_gc <- subset(tC/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # orange
+sbt_gt <- subset(tT/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # purple
+sbt_ga <- subset(tA/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # cyan 
+sbt_gc <- subset(tC/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # orange
 
 	sbt_ac.cut = cut(sbt_ac, brk)
 #	, right=FALSE) 
@@ -1471,4 +1450,315 @@ sbt_gc <- subset(tC/dv, (be=='G' & alt=='G' & tG/dv>prf & xv>xval & yv>yval & tC
 
 }
 
+# Create position substitution rate  graph
+if( (oneortwo==1)  & (type=="mutrate")  & (graphortable=="posgrout") )
+{
+xl=c(-0.0001,range)
+# yl=c(0,10000)
+brk <- seq(0,range, 6.25e-5)
+#brk <- seq(0,range, 6.25e-5/range)
+#brk <- seq(0,0.05, 6.25e-5)
+# xval=overlap
+# yval=overlap
+	prf=0
+	old.par <- par(mfrow=c(1, 1))
 
+	print("mutrate posgrout 1");
+	dfrm <- vectorOfTables[[1]]
+	nbe  <- as.numeric(dfrm$number_base_expected);
+	dfrm <- subset(dfrm, nbe>0);
+	chr  <- dfrm$chromosome;
+	be   <- dfrm$base_expected;
+	alt  <- dfrm$alternative;
+	site <- as.numeric(dfrm$site);
+	tA   <- as.numeric(dfrm$number_of_As);
+	tC   <- as.numeric(dfrm$number_of_Cs);
+	tT   <- as.numeric(dfrm$number_of_Ts);
+	tG   <- as.numeric(dfrm$number_of_Gs);
+	nbe  <- as.numeric(dfrm$number_base_expected);
+	xv   <- as.numeric(dfrm$x);
+	yv   <- as.numeric(dfrm$y);
+
+	dv = nbe
+	#print(range)
+
+	sbt_ac <- subset(tC/dv, (be=='A' & tA/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # blue
+	sbt_at <- subset(tT/dv, (be=='A' & tA/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # cyan 
+	sbt_ag <- subset(tG/dv, (be=='A' & tA/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # violet
+	sbt_tg <- subset(tG/dv, (be=='T' & tT/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # yellow
+	sbt_ta <- subset(tA/dv, (be=='T' & tT/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # green
+	sbt_tc <- subset(tC/dv, (be=='T' & tT/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # red
+	sbt_ca <- subset(tA/dv, (be=='C' & tC/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # purple 
+	sbt_ct <- subset(tT/dv, (be=='C' & tC/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # pink
+	sbt_cg <- subset(tG/dv, (be=='C' & tC/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # brown
+	sbt_gt <- subset(tT/dv, (be=='G' & tG/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # black
+	sbt_ga <- subset(tA/dv, (be=='G' & tG/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # orange
+	sbt_gc <- subset(tC/dv, (be=='G' & tG/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # grey
+
+
+	h11s <- hist(sbt_ac, breaks=brk, plot=FALSE)		# ac-tg
+	h12s <- hist(sbt_at, breaks=brk, plot=FALSE)		# at-ta
+	h13s <- hist(sbt_ag, breaks=brk, plot=FALSE)		# ag-tc
+	
+	h21s <- hist(sbt_tg, breaks=brk, plot=FALSE)		# tg-ac
+	h22s <- hist(sbt_ta, breaks=brk, plot=FALSE)		# ta-at
+	h23s <- hist(sbt_tc, breaks=brk, plot=FALSE)		# tc-ag
+	
+	h31s <- hist(sbt_ca, breaks=brk, plot=FALSE)		# ca-gt
+	h32s <- hist(sbt_ct, breaks=brk, plot=FALSE)		# ct-ga
+	h33s <- hist(sbt_cg, breaks=brk, plot=FALSE)		# cg-gc
+
+	h41s <- hist(sbt_gt, breaks=brk, plot=FALSE)		# gt-ac
+	h42s <- hist(sbt_ga, breaks=brk, plot=FALSE)		# ga-ct
+	h43s <- hist(sbt_gc, breaks=brk, plot=FALSE)		# gc-cg	
+
+	ysmaxi = max(h11s$counts, h21s$counts, h12s$counts, h22s$counts, h13s$counts, h23s$counts, h31s$counts, h41s$counts, h32s$counts, h42s$counts, h33s$counts, h43s$counts)
+	ysm = ysmaxi + 0.1*ysmaxi
+	ysl=c(0,ysm)
+	ttl  = paste("Mutation Rate: sites size>=", (cover+1), ", reference > ", (prf), ", y=counts\n", sep="")
+	subi = paste("A->C = blue, T->G = yellow, A->T = cyan, T->A = green, A->G =violet, T->C = red\nC->A = purple, G->T = black, C->T = pink, G->A = orange, C->G = brown, G->C = grey\n", sep="")
+
+	if(be[[1]][1]=='A')
+	{
+	plot(x=h11s$mids, y=h11s$counts, lwd = 1, col="blue", type="l", yaxt="n", xlim=xl, ylim = ysl, xaxt="n", sub = subi, cex.sub = 0.75, font.sub = 1, xlab=NA,  cex.main = 0.75, main=paste(ttl, "file: ", tblnms[1], sep=""), ylab=tblnms[1])
+	lines(x=h12s$mids, y=h12s$counts, lwd = 1, col="cyan")
+	lines(x=h13s$mids, y=h13s$counts, lwd = 1, col="violet")
+	}
+
+	if(be[[1]][1]=='T')
+	{
+	plot(x=h21s$mids, y=h21s$counts, lwd = 1, col="yellow", type="l", yaxt="n", xlim=xl, ylim = ysl, xaxt="n", sub = subi, cex.sub = 0.75, font.sub = 1, xlab=NA,  cex.main = 0.75, main=paste(ttl, "file: ", tblnms[1], sep=""), ylab=tblnms[1])
+	lines(x=h22s$mids, y=h22s$counts, lwd = 1, col="green")
+	lines(x=h23s$mids, y=h23s$counts, lwd = 1, col="red")
+	}
+
+	if(be[[1]][1]=='C')
+	{
+	plot(x=h31s$mids, y=h31s$counts, lwd = 1, col="purple", type="l", yaxt="n", xlim=xl, ylim = ysl, xaxt="n", sub = subi, cex.sub = 0.75, font.sub = 1, xlab=NA,  cex.main = 0.75, main=paste(ttl, "file: ", tblnms[1], sep=""), ylab=tblnms[1])
+	lines(x=h32s$mids, y=h32s$counts, lwd = 1, col="pink")
+	lines(x=h33s$mids, y=h33s$counts, lwd = 1, col="brown")
+	}
+
+	if(be[[1]][1]=='G')
+	{
+	plot(x=h41s$mids, y=h41s$counts, lwd = 1, col="black", type="l", yaxt="n", xlim=xl, ylim = ysl, xaxt="n", sub = subi, cex.sub = 0.75, font.sub = 1, xlab=NA,  cex.main = 0.75, main=paste(ttl, "file: ", tblnms[1], sep=""), ylab=tblnms[1])
+	lines(x=h42s$mids, y=h42s$counts, lwd = 1, col="orange")
+	lines(x=h43s$mids, y=h43s$counts, lwd = 1, col="grey")
+	}
+
+	axis(1, cex.axis = .75)
+	axis(2, pos=c(0,0), cex.axis = .75)
+
+	par(old.par)
+	dev.off()
+}
+
+# Create position empirical pvalue graph 
+if( (oneortwo==1)  & (type=="pvalue")  & (graphortable=="posgrout") )
+{
+xl=c(-0.0001,range)
+
+	print("pvalue posgrout 1");
+	dfrm <- vectorOfTables[[1]]
+	nbe  <- as.numeric(dfrm$number_base_expected);
+	dfrm <- subset(dfrm, nbe>0);
+	chr  <- dfrm$chromosome;
+	be   <- dfrm$base_expected;
+	alt  <- dfrm$alternative;
+	site <- as.numeric(dfrm$site);
+	tA   <- as.numeric(dfrm$number_of_As);
+	tC   <- as.numeric(dfrm$number_of_Cs);
+	tT   <- as.numeric(dfrm$number_of_Ts);
+	tG   <- as.numeric(dfrm$number_of_Gs);
+	nbe  <- as.numeric(dfrm$number_base_expected);
+	xv   <- as.numeric(dfrm$x);
+	yv   <- as.numeric(dfrm$y);
+
+	dv = nbe;
+	#print(range);
+
+	crlimit=1.5
+	xl=c(-0.0001,range)
+	#xl=c(-0.0001,0.005)
+	yl=c(0,10000)
+#	brk <- seq(0,0.005, 6.25e-5)
+#	brk <- seq(0,1.0, 10e-5)
+	right_points <- seq(0,1.0, 10e-5)
+#	brk <- seq(-0.0001,1.0, 10e-5)
+#	xl=c(-0.0,0.03)
+##	xval=0
+##	yval=0
+	j=0
+	i=1
+	prf=0
+#	sbt_ac <- subset(tC/dv, (be=='A' & alt=='C' & tA/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # blue
+#	sbt_at <- subset(tT/dv, (be=='A' & alt=='T' & tA/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # cyan 
+#	sbt_ag <- subset(tG/dv, (be=='A' & alt=='G' & tA/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # violet
+
+#	sbt_tg <- subset(tG/dv, (be=='T' & alt=='G' & tT/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # yellow
+#	sbt_ta <- subset(tA/dv, (be=='T' & alt=='A' & tT/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # green
+#	sbt_tc <- subset(tC/dv, (be=='T' & alt=='C' & tT/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # red
+
+#	sbt_ca <- subset(tA/dv, (be=='C' & alt=='A' & tC/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # purple 
+#	sbt_ct <- subset(tT/dv, (be=='C' & alt=='T' & tC/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # pink
+#	sbt_cg <- subset(tG/dv, (be=='C' & alt=='G' & tC/dv>prf & xv>xval & yv>yval & tG/dv < 0.005 & dv>cover)) # brown
+
+#	sbt_gt <- subset(tT/dv, (be=='G' & alt=='T' & tG/dv>prf & xv>xval & yv>yval & tT/dv < 0.005 & dv>cover)) # black
+#	sbt_ga <- subset(tA/dv, (be=='G' & alt=='A' & tG/dv>prf & xv>xval & yv>yval & tA/dv < 0.005 & dv>cover)) # orange
+#	sbt_gc <- subset(tC/dv, (be=='G' & alt=='C' & tG/dv>prf & xv>xval & yv>yval & tC/dv < 0.005 & dv>cover)) # grey
+
+#	sbt_ac <- subset(tC/dv, (be=='A' & alt=='C' & tA/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # blue
+#	sbt_at <- subset(tT/dv, (be=='A' & alt=='T' & tA/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # cyan 
+#	sbt_ag <- subset(tG/dv, (be=='A' & alt=='G' & tA/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # violet
+#	sbt_tg <- subset(tG/dv, (be=='T' & alt=='G' & tT/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # yellow
+#	sbt_ta <- subset(tA/dv, (be=='T' & alt=='A' & tT/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # green
+#	sbt_tc <- subset(tC/dv, (be=='T' & alt=='C' & tT/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # red
+#	sbt_ca <- subset(tA/dv, (be=='C' & alt=='A' & tC/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # purple 
+#	sbt_ct <- subset(tT/dv, (be=='C' & alt=='T' & tC/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # pink
+#	sbt_cg <- subset(tG/dv, (be=='C' & alt=='G' & tC/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # brown
+#	sbt_gt <- subset(tT/dv, (be=='G' & alt=='T' & tG/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # black
+#	sbt_ga <- subset(tA/dv, (be=='G' & alt=='A' & tG/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # orange
+#	sbt_gc <- subset(tC/dv, (be=='G' & alt=='C' & tG/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # grey
+
+
+	sbt_ac <- subset(tC/dv, (be=='A' & tA/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # blue
+	sbt_at <- subset(tT/dv, (be=='A' & tA/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # cyan 
+	sbt_ag <- subset(tG/dv, (be=='A' & tA/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # violet
+	sbt_tg <- subset(tG/dv, (be=='T' & tT/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # yellow
+	sbt_ta <- subset(tA/dv, (be=='T' & tT/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # green
+	sbt_tc <- subset(tC/dv, (be=='T' & tT/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # red
+	sbt_ca <- subset(tA/dv, (be=='C' & tC/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # purple 
+	sbt_ct <- subset(tT/dv, (be=='C' & tC/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # pink
+	sbt_cg <- subset(tG/dv, (be=='C' & tC/dv>prf & xv>xval & yv>yval & tG/dv < range & dv>cover)) # brown
+	sbt_gt <- subset(tT/dv, (be=='G' & tG/dv>prf & xv>xval & yv>yval & tT/dv < range & dv>cover)) # black
+	sbt_ga <- subset(tA/dv, (be=='G' & tG/dv>prf & xv>xval & yv>yval & tA/dv < range & dv>cover)) # orange
+	sbt_gc <- subset(tC/dv, (be=='G' & tG/dv>prf & xv>xval & yv>yval & tC/dv < range & dv>cover)) # grey
+
+
+#sbt_ga <- subset(tA/dv, (be=='G' & alt=='A' & tG/dv>prf & xv>xval & yv>yval & dv>cover)) # orange 
+
+	sbt_ac.cut = cut(sbt_ac, brk, right=FALSE)
+	sbt_ac.freq = table(sbt_ac.cut)
+	cumfreq0 = c(0, cumsum(sbt_ac.freq))
+	sumfreq0=sum(sbt_ac.freq)
+	sbt_ac1 = cumfreq0/sumfreq0
+	sbt_ac1_p = 1-cumfreq0/sumfreq0
+	
+	sbt_at.cut = cut(sbt_at, brk, right=FALSE)
+	sbt_at.freq = table(sbt_at.cut)
+	cumfreq0 = c(0, cumsum(sbt_at.freq))
+	sumfreq0=sum(sbt_at.freq)
+	sbt_at1 = cumfreq0/sumfreq0
+	sbt_at1_p = 1-cumfreq0/sumfreq0
+	
+	sbt_ag.cut = cut(sbt_ag, brk, right=FALSE)
+	sbt_ag.freq = table(sbt_ag.cut)
+	cumfreq0 = c(0, cumsum(sbt_ag.freq))
+	sumfreq0=sum(sbt_ag.freq)
+	sbt_ag1 = cumfreq0/sumfreq0
+	sbt_ag1_p = 1-cumfreq0/sumfreq0
+
+	sbt_tg.cut = cut(sbt_tg, brk, right=FALSE)
+	sbt_tg.freq = table(sbt_tg.cut)
+	cumfreq0 = c(0, cumsum(sbt_tg.freq))
+	sumfreq0=sum(sbt_tg.freq)
+	sbt_tg1 = cumfreq0/sumfreq0
+	sbt_tg1_p = 1-cumfreq0/sumfreq0
+
+	sbt_ta.cut = cut(sbt_ta, brk, right=FALSE)
+	sbt_ta.freq = table(sbt_ta.cut)
+	cumfreq0 = c(0, cumsum(sbt_ta.freq))
+	sumfreq0=sum(sbt_ta.freq)
+	sbt_ta1 = cumfreq0/sumfreq0
+	sbt_ta1_p = 1-cumfreq0/sumfreq0
+
+	sbt_tc.cut = cut(sbt_tc, brk, right=FALSE)
+	sbt_tc.freq = table(sbt_tc.cut)
+	cumfreq0 = c(0, cumsum(sbt_tc.freq))
+	sumfreq0=sum(sbt_tc.freq)
+	sbt_tc1 = cumfreq0/sumfreq0
+	sbt_tc1_p = 1-cumfreq0/sumfreq0
+
+	sbt_ca.cut = cut(sbt_ca, brk, right=FALSE)
+	sbt_ca.freq = table(sbt_ca.cut)
+	cumfreq0 = c(0, cumsum(sbt_ca.freq))
+	sumfreq0=sum(sbt_ca.freq)
+	sbt_ca1 = cumfreq0/sumfreq0
+	sbt_ca1_p = 1-cumfreq0/sumfreq0
+
+	sbt_ct.cut = cut(sbt_ct, brk, right=FALSE)
+	sbt_ct.freq = table(sbt_ct.cut)
+	cumfreq0 = c(0, cumsum(sbt_ct.freq))
+	sumfreq0=sum(sbt_ct.freq)
+	sbt_ct1 = cumfreq0/sumfreq0
+	sbt_ct1_p = 1-cumfreq0/sumfreq0
+
+	sbt_cg.cut = cut(sbt_cg, brk, right=FALSE)
+	sbt_cg.freq = table(sbt_cg.cut)
+	cumfreq0 = c(0, cumsum(sbt_cg.freq))
+	sumfreq0=sum(sbt_cg.freq)
+	sbt_cg1 = cumfreq0/sumfreq0
+	sbt_cg1_p = 1-cumfreq0/sumfreq0
+
+	sbt_gt.cut = cut(sbt_gt, brk, right=FALSE)
+	sbt_gt.freq = table(sbt_gt.cut)
+	cumfreq0 = c(0, cumsum(sbt_gt.freq))
+	sumfreq0=sum(sbt_gt.freq)
+	sbt_gt1 = cumfreq0/sumfreq0
+	sbt_gt1_p = 1-cumfreq0/sumfreq0
+
+	sbt_ga.cut = cut(sbt_ga, brk, right=FALSE)
+	sbt_ga.freq = table(sbt_ga.cut)
+	cumfreq0 = c(0, cumsum(sbt_ga.freq))
+	sumfreq0=sum(sbt_ga.freq)
+	sbt_ga1 = cumfreq0/sumfreq0
+	sbt_ga1_p = 1-cumfreq0/sumfreq0
+
+	sbt_gc.cut = cut(sbt_gc, brk, right=FALSE)
+	sbt_gc.freq = table(sbt_gc.cut)
+	cumfreq0 = c(0, cumsum(sbt_gc.freq))
+	sumfreq0=sum(sbt_gc.freq)
+	sbt_gc1 = cumfreq0/sumfreq0
+	sbt_gc1_p = 1-cumfreq0/sumfreq0
+
+	ymaxi = max(log10(sbt_ac),log10(sbt_at),log10(sbt_ag),log10(sbt_tg),log10(sbt_ta),log10(sbt_tc),log10(sbt_ca),log10(sbt_ct),log10(sbt_cg),log10(sbt_gt),log10(sbt_ga),log10(sbt_gc))
+	ym = ymaxi + 0.1*ymaxi
+	
+	yl=c(-3,0)
+
+	ttl  = paste("p_value: sites size>=", (cover+1), ", reference > ", (prf), "%,  y=log(p-value)\n",sep="");
+	subia = paste("A->C = blue, T->G = yellow, A->T = cyan, T->A = green, A->G =violet, T->C = red\nC->A = purple, G->T = black, C->T = pink, G->A = orange, C->G = brown, G->C = grey\n", sep="")
+#	tblnms = c("table01.tsv")
+
+	if(be[[1]][1]=='A')
+	{
+	 plot(x=brk, y=(lf)*log10(sbt_ac1_p), col="blue", lwd = 1, type="l", ylim=yl, xlim=xl, yaxt='n', xaxt="n", sub = subia, cex.sub = 0.70, font.sub = 1, xlab=NA, main=paste(ttl,"file: ", tblnms[1], sep=""), cex.main=0.70, ylab=tblnms[1])
+	lines(x=brk, y=(lf)*log10(sbt_at1_p), col="cyan", lwd = 1)
+	lines(x=brk, y=(lf)*log10(sbt_ag1_p), col="violet", lwd = 1)
+	}
+
+	if(be[[1]][1]=='T')
+	{
+	 plot(x=brk, y=(lf)*log10(sbt_tg1_p), col="yellow", lwd = 1, type="l", ylim=yl, xlim=xl, yaxt='n', xaxt="n", sub = subia, cex.sub = 0.70, font.sub = 1, xlab=NA, main=paste(ttl,"file: ", tblnms[1], sep=""), cex.main=0.70, ylab=tblnms[1])
+	lines(x=brk, y=(lf)*log10(sbt_ta1_p), col="green", lwd = 1)
+	lines(x=brk, y=(lf)*log10(sbt_tc1_p), col="red", lwd = 1)
+	}
+
+	if(be[[1]][1]=='C')
+	{
+	 plot(x=brk, y=(lf)*log10(sbt_ca1_p), col="purple", lwd = 1, type="l", ylim=yl, xlim=xl, yaxt='n', xaxt="n", sub = subia, cex.sub = 0.70, font.sub = 1, xlab=NA, main=paste(ttl,"file: ", tblnms[1], sep=""), cex.main=0.70, ylab=tblnms[1])
+	lines(x=brk, y=(lf)*log10(sbt_ct1_p), col="pink", lwd = 1)
+	lines(x=brk, y=(lf)*log10(sbt_cg1_p), col="brown", lwd = 1)
+	}
+
+	if(be[[1]][1]=='G')
+	{
+	 plot(x=brk, y=(lf)*log10(sbt_gt1_p), col="black", lwd = 1, type="l", ylim=yl, xlim=xl, yaxt='n', xaxt="n", sub = subia, cex.sub = 0.70, font.sub = 1, xlab=NA, main=paste(ttl,"file: ", tblnms[1], sep=""), cex.main=0.70, ylab=tblnms[1])
+	lines(x=brk, y=(lf)*log10(sbt_ga1_p), col="orange", lwd = 1)
+	lines(x=brk, y=(lf)*log10(sbt_gc1_p), col="grey", lwd = 1)
+	}
+	axis(1, cex.axis = .75)
+	#axis(2, pos=c(0,0), cex.axis = .5, labels = FALSE)
+	axis(2, pos=c(0,-10), cex.axis = .5, yaxp = c(-10, 0, 10), las=2)
+	dev.off()
+}
