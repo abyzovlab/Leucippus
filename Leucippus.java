@@ -14449,10 +14449,12 @@ m++;
          
         orprmsits = readTheFileIncludeFirstLine(prm_pth, prfnm);
         orprmsits = SortSites(orprmsits);
-        // for(int u=0; u<orprmsits.size(); u++)
-        //	System.out.println(u + " " + orprmsits.get(u));
+//         for (int u = 0;u < orprmsits.size();u++)
+// 	    System.out.println(u + " " + orprmsits.get(u));
         prmsits = MergeOverlappinSites(orprmsits);
-        
+//         for (int u = 0;u < prmsits.size();u++)
+// 	    System.out.println(u + " " + prmsits.get(u));
+//  	System.exit(0);
         
         for (int i = 0; i < prmsits.size(); i++)
             System.out.println(prmsits.get(i));
@@ -15145,16 +15147,13 @@ m++;
 				// System.out.println("not sorted");
 //	11/24/2016
 //	11/24/2016		if (  (crst < pren) && (!(CurPOS.equals(POS))))
-				diffcrs_prvend = crst-pren;
+				diffcrs_prvend = crst - pren;
 //				if (  (crst <= pren) && (!(CurPOS.equals(POS))))	//	11/24/2016
 				//if (  (diffcrs_prvend < 300) && (!(CurPOS.equals(POS))))	//	11/24/2016
 //12/01/2016
-				if (  (diffcrs_prvend < 2) && (!(CurPOS.equals(POS))))
-//12/01/2016
-
-
+//				if (diffcrs_prvend < 2 && !CurPOS.equals(POS))
 //				prevent double position to happen on table 
-
+				if (crst == prst && cren == pren && !CurPOS.equals(POS))
 				{
 					//System.out.println("overlap found");
 					//System.out.println(lincpp);
